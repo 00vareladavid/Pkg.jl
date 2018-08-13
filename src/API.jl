@@ -15,15 +15,20 @@ preview_info() = printstyled("───── Preview mode ─────\n"; c
 
 include("generate.jl")
 
-function check_package_name(x::String)
+function handle_package_name(x::String; as_url::Bool=false)
+    if as_url
+        return PackageSpec(url=x)
+    end
     if !(occursin(Pkg.REPLMode.name_re, x))
          pkgerror("$x is not a valid packagename")
     end
     return PackageSpec(x)
 end
 
-add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) = add_or_develop([pkg]; kwargs...)
-add_or_develop(pkgs::Vector{String}; kwargs...)            = add_or_develop([check_package_name(pkg) for pkg in pkgs]; kwargs...)
+add_or_develop(pkg::Union{String, PackageSpec}; kwargs...) =
+    add_or_develop([pkg]; kwargs...)
+add_or_develop(pkgs::Vector{String}; as_url::Bool=false, kwargs...) =
+    add_or_develop([handle_package_name(pkg; as_url=as_url) for pkg in pkgs]; kwargs...)
 add_or_develop(pkgs::Vector{PackageSpec}; kwargs...)       = add_or_develop(Context(), pkgs; kwargs...)
 
 function add_or_develop(ctx::Context, pkgs::Vector{PackageSpec}; mode::Symbol, shared::Bool=true, kwargs...)

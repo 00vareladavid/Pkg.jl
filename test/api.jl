@@ -36,4 +36,11 @@ using Pkg, Test
     end
 end
 
+@testset "Pkg.add" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        Pkg.add("https://github.com/JuliaLang/Example.jl"; as_url = true)
+        @test isinstalled(TEST_PKG)
+    end end end
+end
+
 end # module APITests
