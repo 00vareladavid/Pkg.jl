@@ -205,9 +205,9 @@ end
 ################
 mutable struct Statement
     command::Union{Nothing,CommandSpec}
-    options::Vector{String}
+    options::Vector{Option}
     arguments::Vector{String}
-    meta_options::Vector{String}
+    meta_options::Vector{Option}
     Statement() = new(nothing, [], [], [])
 end
 
@@ -306,7 +306,7 @@ function Statement(words)::Statement
     word = popfirst!(words)
     # meta options
     while is_option(word)
-        push!(statement.meta_options, word)
+        push!(statement.meta_options, parse_option(word))
         isempty(words) && pkgerror("no command specified")
         word = popfirst!(words)
     end
@@ -331,7 +331,11 @@ function Statement(words)::Statement
     statement.command = command
     # command arguments
     for word in words
-        push!((is_option(word) ? statement.options : statement.arguments), word)
+        if is_option(word)
+            push!(statement.options, parse_option(word))
+        else
+            push!(statement.arguments, word)
+        end
     end
     return statement
 end
@@ -516,8 +520,7 @@ function enforce_argument(raw_args::Vector{String}, spec::ArgSpec)::PkgArguments
     return args
 end
 
-function enforce_option(option::String, specs::Dict{String,OptionSpec})::Option
-    opt = parse_option(option)
+function enforce_option(option::Option, specs::Dict{String,OptionSpec})
     spec = get(specs, opt.val, nothing)
     spec !== nothing ||
         pkgerror("option '$(opt.val)' is not a valid option")
@@ -528,17 +531,16 @@ function enforce_option(option::String, specs::Dict{String,OptionSpec})::Option
         opt.argument !== nothing ||
             pkgerror("option '$(opt.val)' expects an argument, but no argument given")
     end
-    return opt
 end
 
-function enforce_option(options::Vector{String}, specs::Dict{String,OptionSpec})::Vector{Option}
+function enforce_option(options::Vector{Option}, specs::Dict{String,OptionSpec})
     unique_keys = Symbol[]
     get_key(opt::Option) = specs[opt.val].api.first
 
     # final parsing
-    toks = map(x->enforce_option(x,specs),options)
+    foreach(x->enforce_option(x,specs), options)
     # checking
-    for opt in toks
+    for opt in options
         # conflicting options
         key = get_key(opt)
         if key in unique_keys
@@ -548,16 +550,18 @@ function enforce_option(options::Vector{String}, specs::Dict{String,OptionSpec})
             push!(unique_keys, key)
         end
     end
-    return toks
 end
 
 # this the entry point for the majority of input checks
 function PkgCommand(statement::Statement)::PkgCommand
-    meta_opts = enforce_option(statement.meta_options, meta_option_specs)
+    enforce_option(statement.meta_options, meta_option_specs)
     args = enforce_argument(statement.arguments,
                             statement.command.argument_spec)
-    opts = enforce_option(statement.options, statement.command.option_specs)
-    return PkgCommand(meta_opts, statement.command, opts, args)
+    enforce_option(statement.options, statement.command.option_specs)
+    return PkgCommand(statement.meta_options,
+                      statement.command,
+                      statement.options,
+                      args)
 end
 
 Context!(ctx::APIOptions)::Context = Types.Context!(collect(ctx))
