@@ -449,7 +449,7 @@ end
 function enforce_argument_count(spec::Pair, args::PkgArguments)
     count = length(args)
     spec.first <= count <= spec.second ||
-        pkgerror("Wrong number of arguments")
+        repl_error(ERROR_ARG_COUNT, [count, spec])
 end
 
 # Only for PkgSpec
