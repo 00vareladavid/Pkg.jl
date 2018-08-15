@@ -11,6 +11,20 @@ import REPL: LineEdit, REPLCompletions
 import ..devdir, ..Types.casesensitive_isdir, ..TOML
 using ..Types, ..Display, ..Operations, ..API
 
+##########
+# Errors #
+##########
+@enum(REPLErrorCode, ERROR_DEFAULT, ERROR_INVALID_COMMAND, ERROR_INVALID_SUBCOMMAND,
+      ERROR_INVALID_OPT, ERROR_OPT_ARG, ERROR_OPT_NO_ARG, ERROR_CONFLICTING_KEYS,
+      ERROR_FLOATING_VERSION, ERROR_FLOATING_REVISION, ERROR_NO_VERSION_REV,
+      ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT)
+struct REPLError <: Exception
+    code::REPLErrorCode
+    x::Any
+end
+repl_error(code::REPLErrorCode=ERROR_DEFAULT, x=nothing) =
+    throw(REPLError(code, x))
+
 #################
 # Git revisions #
 #################
