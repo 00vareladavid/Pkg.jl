@@ -520,35 +520,37 @@ function enforce_argument(raw_args::Vector{String}, spec::ArgSpec)::PkgArguments
     return args
 end
 
-function enforce_option(option::Option, specs::Dict{String,OptionSpec})
-    spec = get(specs, opt.val, nothing)
-    spec !== nothing ||
-        pkgerror("option '$(opt.val)' is not a valid option")
+# checking a single option within the context of a spec
+function enforce_option(option::Option, specs::Dict{String,OptionSpec})::Option
+    spec = get(specs, option.val, nothing)
+    if spec === nothing
+        repl_error(ERROR_INVALID_OPT, option)
+    end
     if spec.is_switch
-        opt.argument === nothing ||
-            pkgerror("option '$(opt.val)' does not take an argument, but '$(opt.argument)' given")
+        if option.argument !== nothing
+            repl_error(ERROR_OPT_ARG, option)
+        end
     else # option takes an argument
-        opt.argument !== nothing ||
-            pkgerror("option '$(opt.val)' expects an argument, but no argument given")
+        if option.argument === nothing
+            repl_error(ERROR_OPT_NO_ARG, option)
+        end
     end
 end
 
+# checking relationships between options
 function enforce_option(options::Vector{Option}, specs::Dict{String,OptionSpec})
     unique_keys = Symbol[]
     get_key(opt::Option) = specs[opt.val].api.first
 
-    # final parsing
     foreach(x->enforce_option(x,specs), options)
-    # checking
-    for opt in options
-        # conflicting options
-        key = get_key(opt)
+    # conflicting options
+    for option in options
+        key = get_key(option)
         if key in unique_keys
-            conflicting = filter(opt->get_key(opt) == key, toks)
-            pkgerror("Conflicting options: $conflicting")
-        else
-            push!(unique_keys, key)
+            conflicting = filter(opt->get_key(opt) == key, options)
+            repl_error(ERROR_CONFLICTING_KEYS, conflicting)
         end
+        push!(unique_keys, key)
     end
 end
 
