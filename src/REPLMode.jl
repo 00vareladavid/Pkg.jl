@@ -488,15 +488,14 @@ end
 # Only for PkgSpec
 function enforce_argument_order(args::Vector{Token})
     prev_arg = nothing
-    function check_prev_arg(valid_type::DataType, error_message::AbstractString)
-        prev_arg isa valid_type || pkgerror(error_message)
-    end
+    check_prev_arg(valid_type::DataType, code, objects) =
+        prev_arg isa valid_type || repl_error(code, objects)
 
     for arg in args
         if arg isa VersionRange
-            check_prev_arg(String, "package name/uuid must precede version spec `@$arg`")
+            check_prev_arg(String, ERROR_FLOATING_VERSION, arg)
         elseif arg isa Rev
-            check_prev_arg(String, "package name/uuid must precede rev spec `#$(arg.rev)`")
+            check_prev_arg(String, ERROR_FLOATING_REVISION, arg)
         end
         prev_arg = arg
     end
