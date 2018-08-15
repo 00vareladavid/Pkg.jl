@@ -208,7 +208,8 @@ mutable struct Statement
     options::Vector{Option}
     arguments::Vector{String}
     meta_options::Vector{Option}
-    Statement() = new(nothing, [], [], [])
+    command_name::Union{Nothing,String}
+    Statement() = new(nothing, [], [], [], nothing)
 end
 
 struct QuotedWord
@@ -297,8 +298,36 @@ function parse(cmd::String; for_completions=false)
     return map(Statement, word_groups)
 end
 
-# vector of words -> structured statement
-# minimal checking is done in this phase
+function read_command!(words::Vector{String}, statement::Statement)
+    word = popfirst!(words)
+    using_default = false
+    # special handling for `preview`, just convert it to a meta option under the hood
+    if word == "preview"
+        if !("--preview" in statement.meta_options)
+            push!(statement.meta_options, "--preview")
+        end
+        isempty(words) && pkgerror("preview requires a command")
+        word = popfirst!(words)
+    end
+    #- end special handling
+    if word in keys(super_specs)
+        super_name = word
+        super = super_specs[word]
+        word = popfirst!(words)
+    else
+        using_default = true
+        super = super_specs["package"]
+    end
+    command = get(super, word, nothing)
+    if command === nothing
+        using_default ?
+            repl_error(ERROR_INVALID_COMMAND, word) :
+            repl_error(ERROR_INVALID_SUBCOMMAND, [super_name, word])
+    end
+    statement.command = command
+    statement.command_name = using_default ? word : join(super_name, word, " ")
+end
+
 function Statement(words)::Statement
     is_option(word) = first(word) == '-'
     statement = Statement()
@@ -311,24 +340,8 @@ function Statement(words)::Statement
         word = popfirst!(words)
     end
     # command
-    # special handling for `preview`, just convert it to a meta option under the hood
-    if word == "preview"
-        if !("--preview" in statement.meta_options)
-            push!(statement.meta_options, "--preview")
-        end
-        isempty(words) && pkgerror("preview requires a command")
-        word = popfirst!(words)
-    end
-    if word in keys(super_specs)
-        super = super_specs[word]
-        isempty(words) && pkgerror("no subcommand specified")
-        word = popfirst!(words)
-    else
-        super = super_specs["package"]
-    end
-    command = get(super, word, nothing)
-    command !== nothing || pkgerror("expected command. instead got [$word]")
-    statement.command = command
+    pushfirst!(words, word)
+    read_command!(words, statement)
     # command arguments
     for word in words
         if is_option(word)
