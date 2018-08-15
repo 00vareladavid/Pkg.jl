@@ -531,18 +531,7 @@ function enforce_option(option::String, specs::Dict{String,OptionSpec})::Option
     return opt
 end
 
-function enforce_meta_options(options::Vector{String}, specs::Dict{String,OptionSpec})::Vector{Option}
-    meta_opt_names = keys(specs)
-    return map(options) do opt
-        tok = enforce_option(opt, specs)
-        tok.val in meta_opt_names ||
-            pkgerror("option '$opt' is not a valid meta option.")
-            #TODO hint that maybe they intended to use it as a command option
-        return tok
-    end
-end
-
-function enforce_opts(options::Vector{String}, specs::Dict{String,OptionSpec})::Vector{Option}
+function enforce_option(options::Vector{String}, specs::Dict{String,OptionSpec})::Vector{Option}
     unique_keys = Symbol[]
     get_key(opt::Option) = specs[opt.val].api.first
 
@@ -550,9 +539,6 @@ function enforce_opts(options::Vector{String}, specs::Dict{String,OptionSpec})::
     toks = map(x->enforce_option(x,specs),options)
     # checking
     for opt in toks
-        # valid option
-        opt.val in keys(specs) ||
-            pkgerror("option '$(opt.val)' is not supported")
         # conflicting options
         key = get_key(opt)
         if key in unique_keys
@@ -567,11 +553,10 @@ end
 
 # this the entry point for the majority of input checks
 function PkgCommand(statement::Statement)::PkgCommand
-    meta_opts = enforce_meta_options(statement.meta_options,
-                                     meta_option_specs)
+    meta_opts = enforce_option(statement.meta_options, meta_option_specs)
     args = enforce_argument(statement.arguments,
                             statement.command.argument_spec)
-    opts = enforce_opts(statement.options, statement.command.option_specs)
+    opts = enforce_option(statement.options, statement.command.option_specs)
     return PkgCommand(meta_opts, statement.command, opts, args)
 end
 
