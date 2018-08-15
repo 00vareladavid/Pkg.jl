@@ -507,7 +507,13 @@ function parse_pkg(raw_args::Vector{String}; valid=[], add_or_dev=false)
     # enforce spec
     push!(valid, String) # always want at least PkgSpec identifiers
     if !all(x->typeof(x) in valid, args)
-        pkgerror("invalid token")
+        if valid == [Rev, String]
+            repl_error(ERROR_NO_VERION)
+        elseif valid == [VersionRange, String]
+            repl_error(ERROR_NO_REV)
+        elseif valid == [String]
+            repl_error(ERROR_NO_VERSION_REV)
+        end
     end
     # convert to final arguments
     return package_args(args; add_or_dev=add_or_dev)
