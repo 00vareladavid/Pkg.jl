@@ -539,7 +539,7 @@ function enforce_argument(raw_args::Vector{String}, spec::ArgSpec)::PkgArguments
 end
 
 # checking a single option within the context of a spec
-function enforce_option(option::Option, specs::Dict{String,OptionSpec})::Option
+function enforce_option(option::Option, specs::Dict{String,OptionSpec})
     spec = get(specs, option.val, nothing)
     if spec === nothing
         repl_error(ERROR_INVALID_OPT, option)
@@ -572,17 +572,68 @@ function enforce_option(options::Vector{Option}, specs::Dict{String,OptionSpec})
     end
 end
 
-# this the entry point for the majority of input checks
+# this the entry point for the majority of "semantic" input checks
 function PkgCommand(statement::Statement)::PkgCommand
-    enforce_option(statement.meta_options, meta_option_specs)
-    args = enforce_argument(statement.arguments,
-                            statement.command.argument_spec)
-    enforce_option(statement.options, statement.command.option_specs)
-    return PkgCommand(statement.meta_options,
-                      statement.command,
-                      statement.options,
-                      args)
-end
+    show_opt(opt::Option) = "`$(length(opt.val) > 1 ? "--" : "-")$(opt.val)`"
+    cmd(statement::Statement) = "`$(statement.command_name)`"
+    ismeta=true
+    try
+        enforce_option(statement.meta_options, meta_option_specs)
+        ismeta=false
+        args = enforce_argument(statement.arguments, statement.command.argument_spec)
+        enforce_option(statement.options, statement.command.option_specs)
+        return PkgCommand(statement.meta_options, statement.command, statement.options, args)
+    catch ex
+        ex isa REPLError || rethrow()
+        if ex.code == ERROR_CONFLICTING_KEYS
+            opts = join(map(show_opt, ex.x), ", ")
+            if ismeta
+                pkgerror("$opts are conflicting meta options")
+            else
+                pkgerror("$opts are conflicting options",
+                         " for command $(cmd(statement)).",
+                         " Choose only one.")
+            end
+        elseif ex.code == ERROR_OPT_NO_ARG
+            meta = ismeta ? "Meta o" : "O"
+            pkgerror("$(meta)ption $(show_opt(ex.x)) requires an argument",
+                     ", but no argument given.")
+        elseif ex.code == ERROR_OPT_ARG
+            meta = ismeta ? "Meta o" : "O"
+            pkgerror("$(meta)ption $(show_opt(ex.x)) does not take an argument",
+                     ", but argument '$(ex.x.argument)' given.")
+        elseif ex.code == ERROR_INVALID_OPT
+            meta = ismeta ? "meta " : ""
+            msg = ""
+                msg = msg * "Option $(show_opt(ex.x)) is not a valid $(meta)option"
+            if ismeta
+                if ex.x.val in keys(statement.command.option_specs)
+                    msg = msg * "\nHint: $(show_opt(ex.x)) is a valid option " *
+                        "for $(cmd(statement)), " *
+                        "try placing it after the command."
+                end
+            else
+                msg = msg * " for command $(cmd(statement))"
+            end
+            pkgerror(msg)
+        elseif ex.code == ERROR_ARG_COUNT
+            pkgerror("Given $(ex.x[1]) arguments, but $(cmd(statement))",
+                     " only accepts $(ex.x[2]) arguments")
+        elseif ex.code == ERROR_FLOATING_VERSION
+            pkgerror("While processing arguments: floating version `@$(ex.x)` found.")
+        elseif ex.code == ERROR_FLOATING_REVISION
+            pkgerror("While processing arguments: floating revision `#$(ex.x.rev)` found.")
+        elseif ex.code == ERROR_NO_VERSION_REV
+            pkgerror("$(cmd(statement)) does not accept versions or revisions")
+        elseif ex.code == ERROR_NO_VERSION
+            pkgerror("$(cmd(statement)) does not accept arguments with versions.")
+        elseif ex.code == ERROR_NO_REV
+            pkgerror("$(cmd(statement)) does not accept arguments with revisions.")
+        else
+            assert(false)
+        end # error codes
+    end # try-catch
+end # PkgCommand
 
 Context!(ctx::APIOptions)::Context = Types.Context!(collect(ctx))
 
