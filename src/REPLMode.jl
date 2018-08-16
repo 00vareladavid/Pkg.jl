@@ -282,20 +282,30 @@ function _statement(words)
         (:arg, word, command, !manifest)
 end
 
-function parse(cmd::String; for_completions=false)
-    # replace new lines with ; to support multiline commands
-    cmd = replace(replace(cmd, "\r\n" => "; "), "\n" => "; ")
-    # tokenize accoring to whitespace / quotes
-    qwords = parse_quotes(cmd)
-    # tokenzie unquoted tokens according to pkg REPL syntax
-    words = lex(qwords)
-    # break up words according to ";"(doing this early makes subsequent processing easier)
-    word_groups = group_words(words)
-    # create statements
-    if for_completions
-        return _statement(word_groups[end])
+function parse_command(command::AbstractString; for_completions=false)::Statement
+    try
+        # tokenize accoring to quotes
+        qwords = parse_quotes(command)
+        # tokenzie unquoted tokens according to pkg REPL syntax
+        tokens = lex(qwords)
+        # create structured statement
+        return Statement(tokens)
+    catch ex
+        ex isa REPLError || rethrow()
     end
-    return map(Statement, word_groups)
+end
+
+# TODO handle completions
+function parse(input::String; for_completions=false)
+    # replace new lines with ; to support multiline commands
+    input = replace(replace(input, "\r\n" => "; "), "\n" => "; ")
+    # break up words according to ";"(doing this early makes subsequent processing easier)
+    commands = split(input, ";")
+    # TODO check here for empty statements
+    if for_completions
+        return parse_command(commands[end]; for_completions=true)
+    end
+    return map(parse_command, commands)
 end
 
 function read_command!(words::Vector{String}, statement::Statement)
@@ -353,23 +363,6 @@ function Statement(words)::Statement
     return statement
 end
 
-# break up words according to `;`(doing this early makes subsequent processing easier)
-# the final group does not require a trailing `;`
-function group_words(words)::Vector{Vector{String}}
-    statements = Vector{String}[]
-    x = String[]
-    for word in words
-        if word == ";"
-            isempty(x) ? pkgerror("empty statement") : push!(statements, x)
-            x = String[]
-        else
-            push!(x, word)
-        end
-    end
-    isempty(x) || push!(statements, x)
-    return statements
-end
-
 const lex_re = r"^[\?\./\+\-](?!\-) | ((git|ssh|http(s)?)|(git@[\w\-\.]+))(:(//)?)([\w\.@\:/\-~]+)(\.git)(/)? | [^@\#\s;]+\s*=\s*[^@\#\s;]+ | \#\s*[^@\#\s;]* | @\s*[^@\#\s;]* | [^@\#\s;]+|;"x
 
 function lex(qwords::Vector{QuotedWord})::Vector{String}
@@ -384,7 +377,7 @@ function lex(qwords::Vector{QuotedWord})::Vector{String}
     return words
 end
 
-function parse_quotes(cmd::String)::Vector{QuotedWord}
+function parse_quotes(cmd::AbstractString)::Vector{QuotedWord}
     in_doublequote = false
     in_singlequote = false
     qwords = QuotedWord[]
@@ -584,6 +577,7 @@ function PkgCommand(statement::Statement)::PkgCommand
         enforce_option(statement.options, statement.command.option_specs)
         return PkgCommand(statement.meta_options, statement.command, statement.options, args)
     catch ex
+        # TODO pretty sure I'm fucking up the stacktrace
         ex isa REPLError || rethrow()
         if ex.code == ERROR_CONFLICTING_KEYS
             opts = join(map(show_opt, ex.x), ", ")
