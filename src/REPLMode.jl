@@ -135,7 +135,6 @@ struct CommandSpec
     option_specs::Dict{String, OptionSpec}
     help::Union{Nothing, Markdown.MD}
 end
-command_specs = Dict{String,CommandSpec}() # TODO remove this ?
 
 function SuperSpecs(foo)::Dict{String,Dict{String,CommandSpec}}
     super_specs = Dict()
@@ -183,6 +182,7 @@ end
 # packages can be identified through: uuid, name, or name+uuid
 # additionally valid for add/develop are: local path, url
 function parse_package(word::AbstractString; add_or_develop=false)::PackageSpec
+    # TODO, expand user ? or home ? something like that ...
     word = replace(word, "~" => homedir())
     if add_or_develop && casesensitive_isdir(word)
         return PackageSpec(Types.GitRepo(word))
@@ -397,7 +397,7 @@ function parse_quotes(cmd::AbstractString)::Vector{QuotedWord}
     qwords = QuotedWord[]
     token_in_progress = Char[]
 
-    push_token!(is_quoted) = begin
+    function push_token!(is_quoted)
         push!(qwords, QuotedWord(String(token_in_progress), is_quoted))
         empty!(token_in_progress)
     end
@@ -1381,8 +1381,6 @@ for (k, v) in pairs(super_specs)
             sort(map(wrap_option, collect(keys(spec.option_specs))))
     end
 end
-# TODO remove this
-command_specs = super_specs["package"]
 
 const help = md"""
 
