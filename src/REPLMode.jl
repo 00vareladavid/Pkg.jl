@@ -624,18 +624,16 @@ function PkgCommand(statement::Statement)::PkgCommand
                      ", but argument '$(ex.state.argument)' given."
         elseif ex.code == ERROR_INVALID_OPT
             meta = ismeta ? "meta " : ""
-            msg = ""
-                msg = msg * "Option $(show_opt(ex.state)) is not a valid $(meta)option"
+            ex.msg = "Option $(show_opt(ex.state)) is not a valid $(meta)option"
             if ismeta
                 if ex.state.val in keys(statement.command.option_specs)
-                    msg = msg * "\nHint: $(show_opt(ex.state)) is a valid option " *
+                    ex.msg = ex.msg * "\nHint: $(show_opt(ex.state)) is a valid option " *
                         "for $(cmd(statement)), " *
                         "try placing it after the command."
                 end
             else
-                msg = msg * " for command $(cmd(statement))"
+                ex.msg = ex.msg * " for command $(cmd(statement))"
             end
-            ex.msg = msg
         elseif ex.code == ERROR_ARG_COUNT
             ex.msg = "Given $(ex.state[1]) arguments, but $(cmd(statement))" *
                      " only accepts $(ex.state[2]) arguments"
