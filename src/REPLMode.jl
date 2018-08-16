@@ -18,7 +18,7 @@ using ..Types, ..Display, ..Operations, ..API
       ERROR_INVALID_OPT, ERROR_OPT_ARG, ERROR_OPT_NO_ARG, ERROR_CONFLICTING_KEYS,
       ERROR_FLOATING_VERSION, ERROR_FLOATING_REVISION, ERROR_NO_VERSION_REV,
       ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT, ERROR_QUOTE, ERROR_MALFORMED_OPT,
-      ERROR_NO_COMMAND)
+      ERROR_MISSING_COMMAND, ERROR_MISSING_SUBCOMMAND)
 struct REPLError <: Exception
     code::REPLErrorCode
     x::Any
@@ -286,21 +286,27 @@ end
 tokenize(command::AbstractString) =
     lex(parse_quotes(command))
 
-function parse_command(command::AbstractString; for_completions=false)
+function parse_command(command::AbstractString)
+    verbose = " (when parsing `$command`)"
     try
         return Statement(tokenize(command))
     catch ex
         ex isa REPLError || rethrow()
         if ex.code == ERROR_QUOTE
-            pkgerror("Unterminated quote (when parsing `$command`)")
+            pkgerror("Unterminated quote$(verbose)")
         elseif ex.code == ERROR_MALFORMED_OPT
-            pkgerror("Malformed option `$(ex.x)` (when parsing `$command`)")
-        elseif ex.code == ERROR_NO_COMMAND
-            pkgerror("No command found (when parsing `$command`)")
+            pkgerror("Malformed option `$(ex.x)`$(verbose)")
+        elseif ex.code == ERROR_MISSING_COMMAND
+            pkgerror("No command found$(verbose)")
         elseif ex.code == ERROR_INVALID_COMMAND
-            pkgerror("`$(ex.x)` is not a valid Pkg command (when parsing `$command`)")
+            pkgerror("`$(ex.x)` is not a valid Pkg command$(verbose)")
         elseif ex.code == ERROR_INVALID_SUBCOMMAND
-            pkgerror("`$(ex.x[2])` is not a subcommand of `$(ex.x[1])`")
+            pkgerror("`$(ex.x[2])` is not a subcommand of `$(ex.x[1])`",
+                     "\nHint: Try tab completions after `$(ex.x[1])` to see available subcommands.")
+        elseif ex.code == ERROR_MISSING_SUBCOMMAND
+            pkgerror("No subcommand found$(verbose)",
+                     "\nHint: `$(ex.x)` is a compound command and requires a subcommand.",
+                     "\nHint: Try tab completions after `$(ex.x)` to see available subcommands.")
         else
             assert(false) #TODO assert not found?
         end
@@ -336,13 +342,18 @@ function read_command!(words::Vector{String}, statement::Statement)
         if !(parse_option("--preview") in statement.meta_options)
             push!(statement.meta_options, parse_option("--preview"))
         end
-        isempty(words) && pkgerror("preview requires a command")
+        if isempty(words)
+            pkgerror("preview requires a command")
+        end
         word = popfirst!(words)
     end
     #- end special handling
     if word in keys(super_specs)
         super_name = word
         super = super_specs[word]
+        if isempty(words)
+            repl_error(ERROR_MISSING_SUBCOMMAND, super_name)
+        end
         word = popfirst!(words)
     else
         using_default = true
@@ -366,7 +377,7 @@ function Statement(words)::Statement
     # meta options
     while is_option(word)
         push!(statement.meta_options, parse_option(word))
-        isempty(words) && repl_error(ERROR_NO_COMMAND)
+        isempty(words) && repl_error(ERROR_MISSING_COMMAND)
         word = popfirst!(words)
     end
     # command
