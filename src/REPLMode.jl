@@ -303,8 +303,8 @@ function read_command!(words::Vector{String}, statement::Statement)
     using_default = false
     # special handling for `preview`, just convert it to a meta option under the hood
     if word == "preview"
-        if !("--preview" in statement.meta_options)
-            push!(statement.meta_options, "--preview")
+        if !(parse_option("--preview") in statement.meta_options)
+            push!(statement.meta_options, parse_option("--preview"))
         end
         isempty(words) && pkgerror("preview requires a command")
         word = popfirst!(words)
@@ -325,7 +325,7 @@ function read_command!(words::Vector{String}, statement::Statement)
             repl_error(ERROR_INVALID_SUBCOMMAND, [super_name, word])
     end
     statement.command = command
-    statement.command_name = using_default ? word : join(super_name, word, " ")
+    statement.command_name = using_default ? word : join([super_name, word], " ")
 end
 
 function Statement(words)::Statement
