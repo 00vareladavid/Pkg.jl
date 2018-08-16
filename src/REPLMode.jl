@@ -292,13 +292,13 @@ function parse_command(command::AbstractString; for_completions=false)
     catch ex
         ex isa REPLError || rethrow()
         if ex.code == ERROR_QUOTE
-            pkgerror("unterminated quote when parsing `$command`")
+            pkgerror("Unterminated quote (when parsing `$command`)")
         elseif ex.code == ERROR_MALFORMED_OPT
-            pkgerror("Encountered malformed option `$(ex.x)` when parsing `$command`")
+            pkgerror("Malformed option `$(ex.x)` (when parsing `$command`)")
         elseif ex.code == ERROR_NO_COMMAND
-            pkgerror("No command given: when parsing `$command`")
+            pkgerror("No command found (when parsing `$command`)")
         elseif ex.code == ERROR_INVALID_COMMAND
-            pkgerror("Invalid command `$(ex.x)` when parsing `$command`")
+            pkgerror("`$(ex.x)` is not a valid Pkg command (when parsing `$command`)")
         elseif ex.code == ERROR_INVALID_SUBCOMMAND
             pkgerror("`$(ex.x[2])` is not a subcommand of `$(ex.x[1])`")
         else
