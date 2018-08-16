@@ -283,14 +283,12 @@ function _statement(words)
         (:arg, word, command, !manifest)
 end
 
-function parse_command(command::AbstractString; for_completions=false)::Statement
+tokenize(command::AbstractString) =
+    lex(parse_quotes(command))
+
+function parse_command(command::AbstractString; for_completions=false)
     try
-        # tokenize accoring to quotes
-        qwords = parse_quotes(command)
-        # tokenzie unquoted tokens according to pkg REPL syntax
-        tokens = lex(qwords)
-        # create structured statement
-        return Statement(tokens)
+        return Statement(tokenize(command))
     catch ex
         ex isa REPLError || rethrow()
         if ex.code == ERROR_QUOTE
@@ -309,17 +307,25 @@ function parse_command(command::AbstractString; for_completions=false)::Statemen
     end
 end
 
-# TODO handle completions
-function parse(input::String; for_completions=false)
+function chunk_input(input::String)::Vector{AbstractString}
     # replace new lines with ; to support multiline commands
     input = replace(replace(input, "\r\n" => "; "), "\n" => "; ")
     # break up words according to ";"(doing this early makes subsequent processing easier)
-    commands = split(input, ";")
-    # TODO check here for empty statements
-    if for_completions
-        return parse_command(commands[end]; for_completions=true)
+    return split(input, ";")
+end
+
+# TODO check for empty statements
+parse(input::String) =
+    map(parse_command, chunk_input(input))
+
+function completions_parse(input::String)
+    try
+        last_command = chunk_input(input)[end]
+        return _statement(tokenize(last_command))
+    catch ex
+        ex isa REPLError || rethrow()
+        return nothing
     end
-    return map(parse_command, commands)
 end
 
 function read_command!(words::Vector{String}, statement::Statement)
@@ -904,7 +910,7 @@ function completions(full, index)::Tuple{Vector{String},UnitRange{Int},Bool}
     if isempty(pre)
         return completion_cache.commands, 0:-1, false
     end
-    x = parse(pre; for_completions=true)
+    x = completions_parse(pre)
     if x === nothing # failed parse (invalid command name)
         return String[], 0:-1, false
     end
