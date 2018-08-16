@@ -19,12 +19,8 @@ using ..Types, ..Display, ..Operations, ..API
       ERROR_FLOATING_VERSION, ERROR_FLOATING_REVISION, ERROR_NO_VERSION_REV,
       ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT, ERROR_QUOTE, ERROR_MALFORMED_OPT,
       ERROR_MISSING_COMMAND, ERROR_MISSING_SUBCOMMAND)
-struct REPLError <: Exception
-    code::REPLErrorCode
-    x::Any
-end
-repl_error(code::REPLErrorCode=ERROR_DEFAULT, x=nothing) =
-    throw(REPLError(code, x))
+repl_error(code::REPLErrorCode=ERROR_DEFAULT, state=nothing) =
+    pkgerror(""; class=PKG_ERROR_REPL, code=code, state=state)
 
 #################
 # Git revisions #
@@ -291,25 +287,26 @@ function parse_command(command::AbstractString)
     try
         return Statement(tokenize(command))
     catch ex
-        ex isa REPLError || rethrow()
+        (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
         if ex.code == ERROR_QUOTE
-            pkgerror("Unterminated quote$(verbose)")
+            ex.msg = "Unterminated quote$(verbose)"
         elseif ex.code == ERROR_MALFORMED_OPT
-            pkgerror("Malformed option `$(ex.x)`$(verbose)")
+            ex.msg = "Malformed option `$(ex.state)`$(verbose)"
         elseif ex.code == ERROR_MISSING_COMMAND
-            pkgerror("No command found$(verbose)")
+            ex.msg = "No command found$(verbose)"
         elseif ex.code == ERROR_INVALID_COMMAND
-            pkgerror("`$(ex.x)` is not a valid Pkg command$(verbose)")
+            ex.msg = "`$(ex.state)` is not a valid Pkg command$(verbose)"
         elseif ex.code == ERROR_INVALID_SUBCOMMAND
-            pkgerror("`$(ex.x[2])` is not a subcommand of `$(ex.x[1])`",
-                     "\nHint: Try tab completions after `$(ex.x[1])` to see available subcommands.")
+            ex.msg = "`$(ex.state[2])` is not a subcommand of `$(ex.state[1])`" *
+                     "\nHint: Try tab completions after `$(ex.state[1])` to see available subcommands."
         elseif ex.code == ERROR_MISSING_SUBCOMMAND
-            pkgerror("No subcommand found$(verbose)",
-                     "\nHint: `$(ex.x)` is a compound command and requires a subcommand.",
-                     "\nHint: Try tab completions after `$(ex.x)` to see available subcommands.")
+            ex.msg = "No subcommand found$(verbose)" *
+                     "\nHint: `$(ex.state)` is a compound command and requires a subcommand." *
+                     "\nHint: Try tab completions after `$(ex.state)` to see available subcommands."
         else
             assert(false) #TODO assert not found?
         end
+        rethrow()
     end
 end
 
@@ -608,55 +605,55 @@ function PkgCommand(statement::Statement)::PkgCommand
         enforce_option(statement.options, statement.command.option_specs)
         return PkgCommand(statement.meta_options, statement.command, statement.options, args)
     catch ex
-        # TODO pretty sure I'm fucking up the stacktrace
-        ex isa REPLError || rethrow()
+        (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
         if ex.code == ERROR_CONFLICTING_KEYS
-            opts = join(map(show_opt, ex.x), ", ")
+            opts = join(map(show_opt, ex.state), ", ")
             if ismeta
-                pkgerror("$opts are conflicting meta options")
+                ex.msg = "$opts are conflicting meta options"
             else
-                pkgerror("$opts are conflicting options",
-                         " for command $(cmd(statement)).",
-                         " Choose only one.")
+                ex.msg = "$opts are conflicting options" *
+                         " for command $(cmd(statement))." *
+                         " Choose only one."
             end
         elseif ex.code == ERROR_OPT_NO_ARG
             meta = ismeta ? "Meta o" : "O"
-            pkgerror("$(meta)ption $(show_opt(ex.x)) requires an argument",
-                     ", but no argument given.")
+            ex.msg = "$(meta)ption $(show_opt(ex.state)) requires an argument" *
+                     ", but no argument given."
         elseif ex.code == ERROR_OPT_ARG
             meta = ismeta ? "Meta o" : "O"
-            pkgerror("$(meta)ption $(show_opt(ex.x)) does not take an argument",
-                     ", but argument '$(ex.x.argument)' given.")
+            ex.msg = "$(meta)ption $(show_opt(ex.state)) does not take an argument" *
+                     ", but argument '$(ex.state.argument)' given."
         elseif ex.code == ERROR_INVALID_OPT
             meta = ismeta ? "meta " : ""
             msg = ""
-                msg = msg * "Option $(show_opt(ex.x)) is not a valid $(meta)option"
+                msg = msg * "Option $(show_opt(ex.state)) is not a valid $(meta)option"
             if ismeta
-                if ex.x.val in keys(statement.command.option_specs)
-                    msg = msg * "\nHint: $(show_opt(ex.x)) is a valid option " *
+                if ex.state.val in keys(statement.command.option_specs)
+                    msg = msg * "\nHint: $(show_opt(ex.state)) is a valid option " *
                         "for $(cmd(statement)), " *
                         "try placing it after the command."
                 end
             else
                 msg = msg * " for command $(cmd(statement))"
             end
-            pkgerror(msg)
+            ex.msg = msg
         elseif ex.code == ERROR_ARG_COUNT
-            pkgerror("Given $(ex.x[1]) arguments, but $(cmd(statement))",
-                     " only accepts $(ex.x[2]) arguments")
+            ex.msg = "Given $(ex.state[1]) arguments, but $(cmd(statement))" *
+                     " only accepts $(ex.state[2]) arguments"
         elseif ex.code == ERROR_FLOATING_VERSION
-            pkgerror("While processing arguments: floating version `@$(ex.x)` found.")
+            ex.msg = "While processing arguments: floating version `@$(ex.state)` found."
         elseif ex.code == ERROR_FLOATING_REVISION
-            pkgerror("While processing arguments: floating revision `#$(ex.x.rev)` found.")
+            ex.msg = "While processing arguments: floating revision `#$(ex.state.rev)` found."
         elseif ex.code == ERROR_NO_VERSION_REV
-            pkgerror("$(cmd(statement)) does not accept versions or revisions")
+            ex.msg = "$(cmd(statement)) does not accept versions or revisions"
         elseif ex.code == ERROR_NO_VERSION
-            pkgerror("$(cmd(statement)) does not accept arguments with versions.")
+            ex.msg = "$(cmd(statement)) does not accept arguments with versions."
         elseif ex.code == ERROR_NO_REV
-            pkgerror("$(cmd(statement)) does not accept arguments with revisions.")
+            ex.msg = "$(cmd(statement)) does not accept arguments with revisions."
         else
             assert(false)
         end # error codes
+        rethrow()
     end # try-catch
 end # PkgCommand
 
