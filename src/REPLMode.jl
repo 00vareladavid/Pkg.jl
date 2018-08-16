@@ -611,9 +611,8 @@ function PkgCommand(statement::Statement)::PkgCommand
             if ismeta
                 ex.msg = "$opts are conflicting meta options"
             else
-                ex.msg = "$opts are conflicting options" *
-                         " for command $(cmd(statement))." *
-                         " Choose only one."
+                ex.msg = "$opts are conflicting options for command $(cmd(statement))." *
+                         "\nHint: Choose only one option."
             end
         elseif ex.code == ERROR_OPT_NO_ARG
             meta = ismeta ? "Meta o" : "O"
