@@ -17,7 +17,8 @@ using ..Types, ..Display, ..Operations, ..API
 @enum(REPLErrorCode, ERROR_DEFAULT, ERROR_INVALID_COMMAND, ERROR_INVALID_SUBCOMMAND,
       ERROR_INVALID_OPT, ERROR_OPT_ARG, ERROR_OPT_NO_ARG, ERROR_CONFLICTING_KEYS,
       ERROR_FLOATING_VERSION, ERROR_FLOATING_REVISION, ERROR_NO_VERSION_REV,
-      ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT)
+      ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT, ERROR_QUOTE, ERROR_MALFORMED_OPT,
+      ERROR_NO_COMMAND)
 struct REPLError <: Exception
     code::REPLErrorCode
     x::Any
@@ -89,7 +90,7 @@ Base.show(io::IO, opt::Option) = print(io, "--$(opt.val)", opt.argument == nothi
 
 function parse_option(word::AbstractString)::Option
     m = match(r"^(?: -([a-z]) | --([a-z]{2,})(?:\s*=\s*(\S*))? )$"ix, word)
-    m == nothing && pkgerror("malformed option: ", repr(word))
+    m == nothing && repl_error(ERROR_MALFORMED_OPT, word)
     option_name = (m.captures[1] != nothing ? m.captures[1] : m.captures[2])
     option_arg = (m.captures[3] == nothing ? nothing : String(m.captures[3]))
     return Option(option_name, option_arg)
@@ -292,6 +293,19 @@ function parse_command(command::AbstractString; for_completions=false)::Statemen
         return Statement(tokens)
     catch ex
         ex isa REPLError || rethrow()
+        if ex.code == ERROR_QUOTE
+            pkgerror("unterminated quote when parsing `$command`")
+        elseif ex.code == ERROR_MALFORMED_OPT
+            pkgerror("Encountered malformed option `$(ex.x)` when parsing `$command`")
+        elseif ex.code == ERROR_NO_COMMAND
+            pkgerror("No command given: when parsing `$command`")
+        elseif ex.code == ERROR_INVALID_COMMAND
+            pkgerror("Invalid command `$(ex.x)` when parsing `$command`")
+        elseif ex.code == ERROR_INVALID_SUBCOMMAND
+            pkgerror("`$(ex.x[2])` is not a subcommand of `$(ex.x[1])`")
+        else
+            assert(false) #TODO assert not found?
+        end
     end
 end
 
@@ -346,7 +360,7 @@ function Statement(words)::Statement
     # meta options
     while is_option(word)
         push!(statement.meta_options, parse_option(word))
-        isempty(words) && pkgerror("no command specified")
+        isempty(words) && repl_error(ERROR_NO_COMMAND)
         word = popfirst!(words)
     end
     # command
@@ -408,7 +422,7 @@ function parse_quotes(cmd::AbstractString)::Vector{QuotedWord}
         end
     end
     if (in_doublequote || in_singlequote)
-        pkgerror("unterminated quote")
+        repl_error(ERROR_QUOTE)
     else
         push_token!(false)
     end
