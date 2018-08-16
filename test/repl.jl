@@ -355,35 +355,32 @@ end
 
 @testset "parse completions" begin
     # meta options
-    @test Pkg.REPLMode.parse("--pre"; for_completions=true) == (:meta, "--pre", nothing, true)
-    @test Pkg.REPLMode.parse("--meta --pre"; for_completions=true) == (:meta, "--pre", nothing, true)
-    @test Pkg.REPLMode.parse("--meta -"; for_completions=true) == (:meta, "-", nothing, true)
-    @test Pkg.REPLMode.parse("--meta --"; for_completions=true) == (:meta, "--", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--pre") == (:meta, "--pre", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--meta --pre") == (:meta, "--pre", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--meta -") == (:meta, "-", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--meta --") == (:meta, "--", nothing, true)
     # commands
-    @test Pkg.REPLMode.parse("--preview"; for_completions=true) == (:cmd, "", nothing, true)
-    @test Pkg.REPLMode.parse("--preview ad"; for_completions=true) == (:cmd, "ad", nothing, true)
-    @test Pkg.REPLMode.parse("--meta --preview r"; for_completions=true) == (:cmd, "r", nothing, true)
-    @test Pkg.REPLMode.parse("--preview reg"; for_completions=true) == (:cmd, "reg", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--preview") == (:cmd, "", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--preview ad") == (:cmd, "ad", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--meta --preview r") == (:cmd, "r", nothing, true)
+    @test Pkg.REPLMode.completions_parse("--preview reg") == (:cmd, "reg", nothing, true)
     # sub commands
-    @test Pkg.REPLMode.parse("--preview registry"; for_completions=true) ==
-        (:sub, "", "registry", true)
-    @test Pkg.REPLMode.parse("--preview registry a"; for_completions=true) ==
-        (:sub, "a", "registry", true)
+    @test Pkg.REPLMode.completions_parse("--preview registry") == (:sub, "", "registry", true)
+    @test Pkg.REPLMode.completions_parse("--preview registry a") == (:sub, "a", "registry", true)
     # options
-    @test Pkg.REPLMode.parse("add -"; for_completions=true) ==
+    @test Pkg.REPLMode.completions_parse("add -") ==
         (:opt, "-", Pkg.REPLMode.super_specs["package"]["add"], true)
-    @test Pkg.REPLMode.parse("up --m"; for_completions=true) ==
+    @test Pkg.REPLMode.completions_parse("up --m") ==
         (:opt, "--m", Pkg.REPLMode.super_specs["package"]["up"], true)
-    @test Pkg.REPLMode.parse("up --major --pro"; for_completions=true) ==
+    @test Pkg.REPLMode.completions_parse("up --major --pro") ==
         (:opt, "--pro", Pkg.REPLMode.super_specs["package"]["up"], true)
-    @test Pkg.REPLMode.parse("foo --maj"; for_completions=true) ===
-        nothing
+    @test Pkg.REPLMode.completions_parse("foo --maj") === nothing
     # arguments
-    @test Pkg.REPLMode.parse("up --major Ex"; for_completions=true) ==
+    @test Pkg.REPLMode.completions_parse("up --major Ex") ==
         (:arg, "Ex", Pkg.REPLMode.super_specs["package"]["up"], true)
-    @test Pkg.REPLMode.parse("--preview up --major foo Ex"; for_completions=true) ==
+    @test Pkg.REPLMode.completions_parse("--preview up --major foo Ex") ==
         (:arg, "Ex", Pkg.REPLMode.super_specs["package"]["up"], true)
-    @test Pkg.REPLMode.parse("remove --manifest Ex"; for_completions=true) ==
+    @test Pkg.REPLMode.completions_parse("remove --manifest Ex") ==
         (:arg, "Ex", Pkg.REPLMode.super_specs["package"]["remove"], false)
 end
 
