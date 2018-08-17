@@ -214,13 +214,8 @@ struct QuotedWord
     isquoted::Bool
 end
 
-function unwrap_option(option::String)
-    if startswith(option, "--")
-        return length(option) == 2 ? "" : option[3:end]
-    elseif length(option) == 2
-        return option[end]
-    end
-end
+unwrap_option(option::String) =
+    startswith(option, "--") ? option[3:end] : option[end]
 
 wrap_option(option::String) =
     length(option) == 1 ? "-$option" : "--$option"
@@ -521,7 +516,7 @@ function package_args(args::Vector{Token}; add_or_dev=false)::Vector{PackageSpec
                 pkgs[end].repo.rev = arg.rev
             end
         else
-            assert(false)
+            @assert false
         end
     end
     return pkgs
@@ -614,7 +609,6 @@ end
 
 # this the entry point for the majority of "semantic" input checks
 function PkgCommand(statement::Statement)::PkgCommand
-    show_opt(opt::Option) = "`$(length(opt.val) > 1 ? "--" : "-")$(opt.val)`"
     cmd(statement::Statement) = "`$(statement.command_name)`"
     ismeta=true
     try
@@ -626,7 +620,7 @@ function PkgCommand(statement::Statement)::PkgCommand
     catch ex
         (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
         if ex.code == ERROR_CONFLICTING_KEYS
-            opts = join(map(show_opt, ex.state), ", ")
+            opts = join(map(wrap_option, ex.state), ", ")
             if ismeta
                 ex.msg = "$opts are conflicting meta options"
             else
@@ -635,18 +629,18 @@ function PkgCommand(statement::Statement)::PkgCommand
             end
         elseif ex.code == ERROR_OPT_NO_ARG
             meta = ismeta ? "Meta o" : "O"
-            ex.msg = "$(meta)ption $(show_opt(ex.state)) requires an argument" *
+            ex.msg = "$(meta)ption $(wrap_option(ex.state)) requires an argument" *
                      ", but no argument given."
         elseif ex.code == ERROR_OPT_ARG
             meta = ismeta ? "Meta o" : "O"
-            ex.msg = "$(meta)ption $(show_opt(ex.state)) does not take an argument" *
+            ex.msg = "$(meta)ption $(wrap_option(ex.state)) does not take an argument" *
                      ", but argument '$(ex.state.argument)' given."
         elseif ex.code == ERROR_INVALID_OPT
             meta = ismeta ? "meta " : ""
-            ex.msg = "Option $(show_opt(ex.state)) is not a valid $(meta)option"
+            ex.msg = "Option $(wrap_option(ex.state)) is not a valid $(meta)option"
             if ismeta
                 if ex.state.val in keys(statement.command.option_specs)
-                    ex.msg = ex.msg * "\nHint: $(show_opt(ex.state)) is a valid option " *
+                    ex.msg = ex.msg * "\nHint: $(wrap_option(ex.state)) is a valid option " *
                         "for $(cmd(statement)), " *
                         "try placing it after the command."
                 end
@@ -667,7 +661,7 @@ function PkgCommand(statement::Statement)::PkgCommand
         elseif ex.code == ERROR_NO_REV
             ex.msg = "$(cmd(statement)) does not accept arguments with revisions."
         else
-            assert(false)
+            @assert false
         end # error codes
         rethrow()
     end # try-catch
