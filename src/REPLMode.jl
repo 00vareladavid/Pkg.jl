@@ -341,7 +341,7 @@ function completions_parse(input::String)
         last_command = chunk(tokens)[end]
         return _statement(last_command)
     catch ex
-        ex isa REPLError || rethrow()
+        (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
         return nothing
     end
 end
