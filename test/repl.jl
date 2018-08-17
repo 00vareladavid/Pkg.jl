@@ -676,7 +676,7 @@ end
 end
 
 @testset "`parse` integration tests" begin
-    @test isempty(Pkg.REPLMode.parse(""))
+    @test_throws PkgError Pkg.REPLMode.parse("")
 
     statement = Pkg.REPLMode.parse("up")[1]
     @test statement.command.kind == Pkg.REPLMode.CMD_UP
@@ -704,18 +704,18 @@ end
 
     statement = Pkg.REPLMode.parse("--one -t add --first --second arg1")[1]
     @test statement.command.kind == Pkg.REPLMode.CMD_ADD
-    @test statement.meta_options == ["--one", "-t"]
-    @test statement.options == ["--first", "--second"]
+    @test statement.meta_options == map(Pkg.REPLMode.parse_option,["--one", "-t"])
+    @test statement.options == map(Pkg.REPLMode.parse_option, ["--first", "--second"])
     @test statement.arguments == ["arg1"]
 
     statements = Pkg.REPLMode.parse("--one -t add --first -o arg1; --meta pin -x -a arg0 Example")
     @test statements[1].command.kind == Pkg.REPLMode.CMD_ADD
-    @test statements[1].meta_options == ["--one", "-t"]
-    @test statements[1].options == ["--first", "-o"]
+    @test statements[1].meta_options == map(Pkg.REPLMode.parse_option, ["--one", "-t"])
+    @test statements[1].options == map(Pkg.REPLMode.parse_option, ["--first", "-o"])
     @test statements[1].arguments == ["arg1"]
     @test statements[2].command.kind == Pkg.REPLMode.CMD_PIN
-    @test statements[2].meta_options == ["--meta"]
-    @test statements[2].options == ["-x", "-a"]
+    @test statements[2].meta_options == map(Pkg.REPLMode.parse_option, ["--meta"])
+    @test statements[2].options == map(Pkg.REPLMode.parse_option, ["-x", "-a"])
     @test statements[2].arguments == ["arg0", "Example"]
 
     statements = Pkg.REPLMode.parse("up; --meta -x pin --first; dev")
@@ -724,8 +724,8 @@ end
     @test isempty(statements[1].options)
     @test isempty(statements[1].arguments)
     @test statements[2].command.kind == Pkg.REPLMode.CMD_PIN
-    @test statements[2].meta_options == ["--meta", "-x"]
-    @test statements[2].options == ["--first"]
+    @test statements[2].meta_options == map(Pkg.REPLMode.parse_option, ["--meta", "-x"])
+    @test statements[2].options == map(Pkg.REPLMode.parse_option, ["--first"])
     @test isempty(statements[2].arguments)
     @test statements[3].command.kind == Pkg.REPLMode.CMD_DEVELOP
     @test isempty(statements[3].meta_options)
