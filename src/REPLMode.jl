@@ -284,6 +284,7 @@ function chunk(tokens::Vector{String})
     for token in tokens
         if token == ";" && !isempty(chunk)
             push!(chunks, chunk)
+            chunk = String[]
         else
             push!(chunk, token)
         end
