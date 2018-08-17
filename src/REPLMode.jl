@@ -282,9 +282,12 @@ function chunk(tokens::Vector{String})
     chunks = Vector{String}[]
     chunk = String[]
     for token in tokens
-        if token == ";" && !isempty(chunk)
-            push!(chunks, chunk)
-            chunk = String[]
+        if token == ";"
+            # TODO should error on empty command?
+            if !isempty(chunk)
+                push!(chunks, chunk)
+                chunk = String[]
+            end
         else
             push!(chunk, token)
         end
