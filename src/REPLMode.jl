@@ -18,7 +18,7 @@ using ..Types, ..Display, ..Operations, ..API
       ERROR_INVALID_OPT, ERROR_OPT_ARG, ERROR_OPT_NO_ARG, ERROR_CONFLICTING_KEYS,
       ERROR_FLOATING_VERSION, ERROR_FLOATING_REVISION, ERROR_NO_VERSION_REV,
       ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT, ERROR_QUOTE, ERROR_MALFORMED_OPT,
-      ERROR_MISSING_COMMAND, ERROR_MISSING_SUBCOMMAND)
+      ERROR_MISSING_COMMAND, ERROR_MISSING_SUBCOMMAND, ERROR_NO_INPUT)
 repl_error(code::REPLErrorCode=ERROR_DEFAULT, state=nothing) =
     pkgerror(""; class=PKG_ERROR_REPL, code=code, state=state)
 
@@ -282,10 +282,37 @@ end
 tokenize(command::AbstractString) =
     lex(parse_quotes(command))
 
-function parse_command(command::AbstractString)
-    verbose = " (when parsing `$command`)"
+#TODO this could be a utility?
+function chunk(tokens::Vector{String})
+    chunks = Vector{String}[]
+    chunk = String[]
+    for token in tokens
+        if token == ";" && !isempty(chunk)
+            push!(chunks, chunk)
+        else
+            push!(chunk, token)
+        end
+    end
+    !isempty(chunk) && push!(chunks, chunk)
+
+    isempty(chunks) && repl_error(ERROR_NO_INPUT)
+    return chunks
+end
+
+preprocess(input::String) =
+    replace(replace(input, "\r\n" => "; "), "\n" => "; ")
+
+function parse(input::String)
+    verbose = nothing
     try
-        return Statement(tokenize(command))
+        tokens = tokenize(preprocess(input))
+        commands = chunk(tokens)
+        statements = Statement[]
+        for command in commands
+            verbose = "(when parsing `$(join(command, " "))`)"
+            push!(statements, Statement(command))
+        end
+        return statements
     catch ex
         (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
         if ex.code == ERROR_QUOTE
@@ -303,28 +330,20 @@ function parse_command(command::AbstractString)
             ex.msg = "No subcommand found$(verbose)" *
                      "\nHint: `$(ex.state)` is a compound command and requires a subcommand." *
                      "\nHint: Try tab completions after `$(ex.state)` to see available subcommands."
+        elseif ex.code == ERROR_NO_INPUT
+            ex.msg = "No input given"
         else
-            assert(false) #TODO assert not found?
+            @assert false
         end
         rethrow()
     end
 end
 
-function chunk_input(input::String)::Vector{AbstractString}
-    # replace new lines with ; to support multiline commands
-    input = replace(replace(input, "\r\n" => "; "), "\n" => "; ")
-    # break up words according to ";"(doing this early makes subsequent processing easier)
-    return split(input, ";")
-end
-
-# TODO check for empty statements
-parse(input::String) =
-    map(parse_command, chunk_input(input))
-
 function completions_parse(input::String)
     try
-        last_command = chunk_input(input)[end]
-        return _statement(tokenize(last_command))
+        tokens = tokenize(preprocess(input))
+        last_command = chunk(tokens)[end]
+        return _statement(last_command)
     catch ex
         ex isa REPLError || rethrow()
         return nothing
