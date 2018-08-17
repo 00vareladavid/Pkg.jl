@@ -19,7 +19,8 @@ using ..Types, ..Display, ..Operations, ..API
       ERROR_FLOATING_VERSION, ERROR_FLOATING_REVISION, ERROR_NO_VERSION_REV,
       ERROR_NO_VERSION, ERROR_NO_REV, ERROR_ARG_COUNT, ERROR_QUOTE, ERROR_MALFORMED_OPT,
       ERROR_MISSING_COMMAND, ERROR_MISSING_SUBCOMMAND, ERROR_NO_INPUT)
-repl_error(code::REPLErrorCode=ERROR_DEFAULT, state=nothing) =
+
+repl_error(code::REPLErrorCode, state=nothing) =
     pkgerror(""; class=PKG_ERROR_REPL, code=code, state=state)
 
 #################
@@ -558,13 +559,13 @@ function parse_pkg(raw_args::Vector{String}; valid=[], add_or_dev=false)
     args::Vector{PkgToken} = map(word2token, raw_args)
     enforce_argument_order(args)
     # enforce spec
-    push!(valid, String) # always want at least PkgSpec identifiers
-    if !all(x->typeof(x) in valid, args)
-        if valid == [Rev, String]
+    allowed = push!(copy(valid), String) # always want at least PkgSpec identifiers
+    if !all(x->typeof(x) in allowed, args)
+        if valid == [Rev]
             repl_error(ERROR_NO_VERION)
-        elseif valid == [VersionRange, String]
+        elseif valid == [VersionRange]
             repl_error(ERROR_NO_REV)
-        elseif valid == [String]
+        elseif isempty(valid)
             repl_error(ERROR_NO_VERSION_REV)
         end
     end
