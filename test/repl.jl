@@ -764,10 +764,104 @@ end
     end
 end
 
-@testset "conflicting options" begin
+
+###############
+# REPL ERRORS #
+###############
+
+@testset "missused options" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
-        @test_throws PkgError Pkg.REPLMode.pkgstr("up --major --minor")
-        @test_throws PkgError Pkg.REPLMode.pkgstr("rm --project --manifest")
+        try
+            pkg"up --major --minor"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_CONFLICTING_KEYS
+        end
+        try
+            pkg"rm --project --manifest"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_CONFLICTING_KEYS
+        end
+        try
+            pkg"up --major=5"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_OPT_ARG
+        end
+    end
+    end
+    end
+end
+
+@testset "invalid options" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        try
+            pkg"develop --foo"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_INVALID_OPT
+        end
+        try
+            pkg"develop --foo=bar"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_INVALID_OPT
+        end
+        try
+            pkg"--foo up"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_INVALID_OPT
+        end
+    end
+    end
+    end
+end
+
+@testset "PackageSpec parser errors" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        try
+            pkg"develop Example#foo"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_NO_REV
+        end
+        try
+            pkg"rm Example@0.0.1"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_NO_VERSION_REV
+        end
+        try
+            pkg"add Example#foo#bar"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_FLOATING_REVISION
+        end
+        try
+            pkg"add CoolBeans Example#foo@v2.3.0"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_FLOATING_VERSION
+        end
+        try
+            pkg"add Example@0.19.1@v2.3.0 Example2"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_FLOATING_VERSION
+        end
     end
     end
     end
