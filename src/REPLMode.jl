@@ -217,6 +217,7 @@ end
 unwrap_option(option::String) =
     startswith(option, "--") ? option[3:end] : option[end]
 
+wrap_option(option::Option) = wrap_option(option.val)
 wrap_option(option::String) =
     length(option) == 1 ? "-$option" : "--$option"
 
