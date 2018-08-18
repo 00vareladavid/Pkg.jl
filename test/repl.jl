@@ -1014,7 +1014,7 @@ end
         ("minor", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_MINOR),
         ("patch", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_PATCH),
         ("fixed", Pkg.REPLMode.OPT_SWITCH, :level => Pkg.Types.UPLEVEL_FIXED),
-        ("rawnum", Pkg.REPLMode.OPT_ARG, :num => nothing),
+        ("rawnum", Pkg.REPLMode.OPT_ARG, :num => identity),
         ("plus", Pkg.REPLMode.OPT_ARG, :num => x->parse(Int,x)+1),
     ])
 
