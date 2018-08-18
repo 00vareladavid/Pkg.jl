@@ -493,7 +493,7 @@ function APIOptions(options::Vector{Option},
         spec = specs[option.val]
         api_options[spec.api.first] = spec.is_switch ?
             spec.api.second :
-            spec.api.second(option.val)
+            spec.api.second(option.argument)
     end
     return api_options
 end
