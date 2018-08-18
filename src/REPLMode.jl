@@ -502,8 +502,9 @@ end
 
 function enforce_argument_count(spec::Pair, args::PkgArguments)
     count = length(args)
-    spec.first <= count <= spec.second ||
+    if !(spec.first <= count <= spec.second)
         repl_error(ERROR_ARG_COUNT, [count, spec])
+    end
 end
 
 # Only for PkgSpec
@@ -654,8 +655,15 @@ function PkgCommand(statement::Statement)::PkgCommand
                 ex.msg = ex.msg * " for command $(cmd(statement))"
             end
         elseif ex.code == ERROR_ARG_COUNT
-            ex.msg = "Given $(ex.state[1]) arguments, but $(cmd(statement))" *
-                     " only accepts $(ex.state[2]) arguments"
+            ex.msg = "Invalid number of argument given to $(cmd(statement))." *
+                "\nGiven $(ex.state[1]) arguments, but $(cmd(statement)) accepts "
+            if ex.state[2].first == ex.state[2].second
+                ex.msg = ex.msg * "exactly $(ex.state[2].first) arguments."
+            else
+                ex.msg = ex.msg *
+                    "from $(ex.state[2].first) to $(ex.state[2].second) arguments."
+            end
+
         elseif ex.code == ERROR_FLOATING_VERSION
             ex.msg = "While processing arguments: floating version `@$(ex.state)` found."
         elseif ex.code == ERROR_FLOATING_REVISION
