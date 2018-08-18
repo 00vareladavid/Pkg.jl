@@ -316,8 +316,10 @@ function parse(input::String)
         return statements
     catch ex
         (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
-        if ex.code == ERROR_QUOTE
-            ex.msg = "Unterminated quote$(verbose)"
+        if ex.code == ERROR_NO_INPUT
+            ex.msg = "No input given"
+        elseif ex.code == ERROR_QUOTE
+            ex.msg = "Unterminated quote"
         elseif ex.code == ERROR_MALFORMED_OPT
             ex.msg = "Malformed option `$(ex.state)`$(verbose)"
         elseif ex.code == ERROR_MISSING_COMMAND
@@ -331,8 +333,6 @@ function parse(input::String)
             ex.msg = "No subcommand found$(verbose)" *
                      "\nHint: `$(ex.state)` is a compound command and requires a subcommand." *
                      "\nHint: Try tab completions after `$(ex.state)` to see available subcommands."
-        elseif ex.code == ERROR_NO_INPUT
-            ex.msg = "No input given"
         else
             @assert false
         end
