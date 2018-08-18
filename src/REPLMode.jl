@@ -488,16 +488,14 @@ APIOptions(command::PkgCommand)::Dict{Symbol, Any} =
 function APIOptions(options::Vector{Option},
                     specs::Dict{String, OptionSpec},
                     )::Dict{Symbol, Any}
-    keyword_vec = map(options) do opt
-        spec = specs[opt.val]
-        # opt is switch
-        spec.is_switch && return spec.api
-        # no opt wrapper -> just use raw argument
-        spec.api.second === nothing && return spec.api.first => opt.argument
-        # given opt wrapper
-        return spec.api.first => spec.api.second(opt.argument)
+    api_options = Dict{Symbol, Any}()
+    for option in options
+        spec = specs[option.val]
+        api_options[spec.api.first] = spec.is_switch ?
+            spec.api.second :
+            spec.api.second(option.val)
     end
-    return Dict(keyword_vec)
+    return api_options
 end
 
 function enforce_argument_count(spec::Pair, args::PkgArguments)
