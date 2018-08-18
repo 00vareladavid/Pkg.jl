@@ -768,6 +768,66 @@ end
 ###############
 # REPL ERRORS #
 ###############
+@testset "`parse` errors" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        try
+            pkg""
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_NO_INPUT
+        end
+        try
+            pkg"add 'Example"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_QUOTE
+        end
+        try
+            pkg"test ---foobar"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_MALFORMED_OPT
+        end
+        try
+            pkg"test -coolbeans"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_MALFORMED_OPT
+        end
+        try
+            pkg"--preview"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_MISSING_COMMAND
+        end
+        try
+            pkg"--preview poiuw485 Example"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_INVALID_COMMAND
+        end
+        try
+            pkg"--preview package w00ps"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_INVALID_SUBCOMMAND
+        end
+        try
+            pkg"--preview package"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_MISSING_SUBCOMMAND
+        end
+    end end end
+end
 
 @testset "missused options" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
