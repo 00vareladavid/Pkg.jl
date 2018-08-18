@@ -764,7 +764,6 @@ end
     end
 end
 
-
 ###############
 # REPL ERRORS #
 ###############
@@ -839,7 +838,7 @@ end
             @test ex.code == Pkg.REPLMode.ERROR_CONFLICTING_KEYS
         end
         try
-            pkg"rm --project --manifest"
+            pkg"rm --project --manifest Example"
         catch ex
             @test ex isa PkgError
             @test ex.class == Pkg.Types.PKG_ERROR_REPL
@@ -860,14 +859,14 @@ end
 @testset "invalid options" begin
     temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
         try
-            pkg"develop --foo"
+            pkg"develop --foo Example"
         catch ex
             @test ex isa PkgError
             @test ex.class == Pkg.Types.PKG_ERROR_REPL
             @test ex.code == Pkg.REPLMode.ERROR_INVALID_OPT
         end
         try
-            pkg"develop --foo=bar"
+            pkg"develop --foo=bar Example"
         catch ex
             @test ex isa PkgError
             @test ex.class == Pkg.Types.PKG_ERROR_REPL
@@ -883,6 +882,25 @@ end
     end
     end
     end
+end
+
+@testset "`PkgCommand errors`" begin
+    temp_pkg_dir() do project_path; cd_tempdir() do tmpdir; with_temp_env() do;
+        try
+            pkg"activate one two"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_ARG_COUNT
+        end
+        try
+            pkg"instantiate foobar"
+        catch ex
+            @test ex isa PkgError
+            @test ex.class == Pkg.Types.PKG_ERROR_REPL
+            @test ex.code == Pkg.REPLMode.ERROR_ARG_COUNT
+        end
+    end end end
 end
 
 @testset "PackageSpec parser errors" begin
