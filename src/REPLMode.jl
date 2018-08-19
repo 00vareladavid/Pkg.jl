@@ -584,14 +584,11 @@ function enforce_option(option::Option, specs::Dict{String,OptionSpec})
     if spec === nothing
         repl_error(ERROR_INVALID_OPT, option)
     end
-    if spec.is_switch
-        if option.argument !== nothing
-            repl_error(ERROR_OPT_ARG, option)
-        end
-    else # option takes an argument
-        if option.argument === nothing
-            repl_error(ERROR_OPT_NO_ARG, option)
-        end
+    if spec.is_switch && option.argument !== nothing
+        repl_error(ERROR_OPT_ARG, option)
+    end
+    if !(spec.is_switch) && option.argument === nothing
+        repl_error(ERROR_OPT_NO_ARG, option)
     end
 end
 
