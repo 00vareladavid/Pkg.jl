@@ -41,38 +41,26 @@ end
 struct OptionSpec
     name::Name
     api::Pair{Symbol, Any}
-    is_switch::Bool
+    takes_arg::Bool
 end
 
-@enum(OptionClass, OPT_ARG, OPT_SWITCH)
-# TODO make this a kw vec too
-# TODO make OPT_SWITCH the default
-const OptionDeclaration = Tuple{Union{String,Vector{String}}, # name + short_name?
-                                OptionClass, # arg or switch
-                                Pair{Symbol, Any} # api keywords
-                                }
-
-function OptionSpec(x::OptionDeclaration)::OptionSpec
-    get_names(name::String) = (name, nothing)
-    function get_names(names::Vector{String})
-        @assert length(names) == 2
-        return (names[1], names[2])
+function OptionSpec(;name::String,
+                    short_name::Union{Nothing,String}=nothing,
+                    arg::Bool=false,
+                    api::Pair{Symbol,<:Any})::OptionSpec
+    takes_arg = arg
+    #TODO assert names matching lex regex
+    if takes_arg
+        @assert hasmethod(api.second, Tuple{String})
     end
-
-    is_switch = x[2] == OPT_SWITCH
-    api = x[3]
-    (name, short_name) = get_names(x[1])
-    #TODO assert matching lex regex
-    if !is_switch
-        @assert api.second === nothing || hasmethod(api.second, Tuple{String})
-    end
-    return OptionSpec(Name(name, short_name), api, is_switch)
+    return OptionSpec(Name(name, short_name), api, takes_arg)
 end
 
+const OptionDeclaration = Vector{Pair{Symbol,Any}}
 function OptionSpecs(decs::Vector{OptionDeclaration})::Dict{String, OptionSpec}
     specs = Dict()
     for x in decs
-        opt_spec = OptionSpec(x)
+        opt_spec = OptionSpec(;x...)
         @assert get(specs, opt_spec.name.canonical, nothing) === nothing # don't overwrite
         specs[opt_spec.name.canonical] = opt_spec
         if opt_spec.name.short !== nothing
@@ -100,7 +88,7 @@ function parse_option(word::AbstractString)::Option
 end
 
 meta_option_declarations = OptionDeclaration[
-    ("preview", OPT_SWITCH, :preview => true)
+    [:name => "preview", :api => :preview => true]
 ]
 meta_option_specs = OptionSpecs(meta_option_declarations)
 
@@ -472,7 +460,6 @@ end
 # PkgCommand #
 ##############
 const Token = Union{String, VersionRange, Rev}
-const ArgToken = Union{VersionRange, Rev}
 const PkgToken = Union{String, VersionRange, Rev}
 const PkgArguments = Union{Vector{String}, Vector{PackageSpec}}
 struct PkgCommand
@@ -494,9 +481,9 @@ function APIOptions(options::Vector{Option},
     api_options = Dict{Symbol, Any}()
     for option in options
         spec = specs[option.val]
-        api_options[spec.api.first] = spec.is_switch ?
-            spec.api.second :
-            spec.api.second(option.argument)
+        api_options[spec.api.first] = spec.takes_arg ?
+            spec.api.second(option.argument) :
+            spec.api.second
     end
     return api_options
 end
@@ -587,10 +574,10 @@ function enforce_option(option::Option, specs::Dict{String,OptionSpec})
     if spec === nothing
         repl_error(ERROR_INVALID_OPT, option)
     end
-    if spec.is_switch && option.argument !== nothing
+    if !spec.takes_arg && option.argument !== nothing
         repl_error(ERROR_OPT_ARG, option)
     end
-    if !(spec.is_switch) && option.argument === nothing
+    if spec.takes_arg && option.argument === nothing
         repl_error(ERROR_OPT_NO_ARG, option)
     end
 end
@@ -1097,7 +1084,7 @@ command_declarations = [
     :handler => do_test!,
     :arg_spec => (0=>Inf, parse_pkg, []),
     :option_spec => OptionDeclaration[
-        ("coverage", OPT_SWITCH, :coverage => true),
+        [:name => "coverage", :api => :coverage => true],
     ],
     :help => md"""
 
@@ -1130,8 +1117,8 @@ Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`
     :name => "instantiate",
     :handler => do_instantiate!,
     :option_spec => OptionDeclaration[
-        (["project", "p"], OPT_SWITCH, :manifest => false),
-        (["manifest", "m"], OPT_SWITCH, :manifest => true),
+        [:name => "project", :short_name => "p", :api => :manifest => false],
+        [:name => "manifest", :short_name => "m", :api => :manifest => true],
     ],
     :help => md"""
 
@@ -1148,8 +1135,8 @@ If no manifest exists or the `--project` option is given, resolve and download t
     :handler => do_rm!,
     :arg_spec => (1=>Inf, parse_pkg, []),
     :option_spec => OptionDeclaration[
-        (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
-        (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
+        [:name => "project", :short_name => "p", :api => :mode => PKGMODE_PROJECT],
+        [:name => "manifest", :short_name => "m", :api => :mode => PKGMODE_MANIFEST],
     ],
     :help => md"""
 
@@ -1206,8 +1193,8 @@ pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
     :handler => do_develop!,
     :arg_spec => (1=>Inf, parse_pkg, [:add_or_dev => true, :valid => [VersionRange]]),
     :option_spec => OptionDeclaration[
-        ("local", OPT_SWITCH, :shared => false),
-        ("shared", OPT_SWITCH, :shared => true),
+        [:name => "local", :api => :shared => false],
+        [:name => "shared", :api => :shared => true],
     ],
     :help => md"""
 
@@ -1277,7 +1264,7 @@ packages have changed causing the current Manifest to_indices be out of sync.
     :handler => do_activate!,
     :arg_spec => (0=>1, identity, []),
     :option_spec => OptionDeclaration[
-        ("shared", OPT_SWITCH, :shared => true),
+        [:name => "shared", :api => :shared => true],
     ],
     :help => md"""
 
@@ -1295,12 +1282,12 @@ it will be placed in the first depot of the stack.
     :handler => do_up!,
     :arg_spec => (0=>Inf, parse_pkg, [:valid => [VersionRange]]),
     :option_spec => OptionDeclaration[
-        (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
-        (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
-        ("major", OPT_SWITCH, :level => UPLEVEL_MAJOR),
-        ("minor", OPT_SWITCH, :level => UPLEVEL_MINOR),
-        ("patch", OPT_SWITCH, :level => UPLEVEL_PATCH),
-        ("fixed", OPT_SWITCH, :level => UPLEVEL_FIXED),
+        [:name => "project", :short_name => "p", :api => :mode => PKGMODE_PROJECT],
+        [:name => "manifest",:short_name =>  "m", :api => :mode => PKGMODE_MANIFEST],
+        [:name => "major", :api => :level => UPLEVEL_MAJOR],
+        [:name => "minor", :api => :level => UPLEVEL_MINOR],
+        [:name => "patch", :api => :level => UPLEVEL_PATCH],
+        [:name => "fixed", :api => :level => UPLEVEL_FIXED],
     ],
     :help => md"""
 
@@ -1343,8 +1330,8 @@ The `startup.jl` file is disabled during precompilation unless julia is started 
     :short_name => "st",
     :handler => do_status!,
     :option_spec => OptionDeclaration[
-        (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
-        (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
+        [:name => "project", :short_name => "p", :api => :mode => PKGMODE_PROJECT],
+        [:name => "manifest", :short_name => "m", :api => :mode => PKGMODE_MANIFEST],
     ],
     :help => md"""
 
