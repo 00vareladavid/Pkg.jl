@@ -1359,7 +1359,6 @@ Deletes packages that cannot be reached from any existing environment.
     # this is here so that preview appears as a registered command to users
     :kind => CMD_PREVIEW,
     :name => "preview",
-    :arg_spec => (1=>Inf, identity, []), # TODO can this be removed?
     :help => md"""
 
     preview cmd
