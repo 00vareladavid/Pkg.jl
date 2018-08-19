@@ -135,10 +135,9 @@ function SuperSpecs(foo)::Dict{String,Dict{String,CommandSpec}}
     super_specs = Dict()
     for x in foo
         sub_specs = CommandSpecs(x.second)
-        for name in x.first
-            @assert get(super_specs, name, nothing) === nothing
-            super_specs[name] = sub_specs
-        end
+        name = x.first
+        @assert get(super_specs, name, nothing) === nothing
+        super_specs[name] = sub_specs
     end
     return super_specs
 end
@@ -1085,9 +1084,8 @@ end
 ########
 # SPEC #
 ########
-# TODO make the super name a single string, instead of a list
 command_declarations = [
-["registry"] => CommandDeclaration[
+"registry" => CommandDeclaration[
 [
     :kind => CMD_REGISTRY_ADD,
     :name => "add",
@@ -1096,7 +1094,7 @@ command_declarations = [
 ],
 ], #registry
 
-["package"] => CommandDeclaration[
+"package" => CommandDeclaration[
 [   :kind => CMD_TEST,
     :name => "test",
     :handler => do_test!,
