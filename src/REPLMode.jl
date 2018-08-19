@@ -30,12 +30,16 @@ struct Rev
     rev::String
 end
 
+struct Name
+    canonical::String
+    short::Union{Nothing,String}
+end
+
 ###########
 # Options #
 ###########
 struct OptionSpec
-    name::String
-    short_name::Union{Nothing,String}
+    name::Name
     api::Pair{Symbol, Any}
     is_switch::Bool
 end
@@ -60,18 +64,18 @@ function OptionSpec(x::OptionDeclaration)::OptionSpec
     if !is_switch
         @assert api.second === nothing || hasmethod(api.second, Tuple{String})
     end
-    return OptionSpec(name, short_name, api, is_switch)
+    return OptionSpec(Name(name, short_name), api, is_switch)
 end
 
 function OptionSpecs(decs::Vector{OptionDeclaration})::Dict{String, OptionSpec}
     specs = Dict()
     for x in decs
         opt_spec = OptionSpec(x)
-        @assert get(specs, opt_spec.name, nothing) === nothing # don't overwrite
-        specs[opt_spec.name] = opt_spec
-        if opt_spec.short_name !== nothing
-            @assert get(specs, opt_spec.short_name, nothing) === nothing # don't overwrite
-            specs[opt_spec.short_name] = opt_spec
+        @assert get(specs, opt_spec.name.canonical, nothing) === nothing # don't overwrite
+        specs[opt_spec.name.canonical] = opt_spec
+        if opt_spec.name.short !== nothing
+            @assert get(specs, opt_spec.name.short, nothing) === nothing # don't overwrite
+            specs[opt_spec.name.short] = opt_spec
         end
     end
     return specs
@@ -115,16 +119,9 @@ struct ArgSpec
 end
 # TODO eventually, declarations should be a macro
 const CommandDeclaration = Vector{Pair{Symbol,Any}}
-#= TODO
-struct CommandNames
-    canonical::String
-    short::Union{Nothing,String}
-end
-=#
 struct CommandSpec
     kind::CommandKind
-    name::String
-    short_name::Union{Nothing,String}
+    name::Name
     handler::Union{Nothing,Function}
     argument_spec::ArgSpec
     option_specs::Dict{String, OptionSpec}
@@ -143,7 +140,7 @@ function SuperSpecs(foo)::Dict{String,Dict{String,CommandSpec}}
 end
 
 const ArgumentDeclaration = Tuple{Pair, Function, Vector}
-#TODO make sure you don't mistype any of the names
+#TODO make sure names are not mistyped
 function CommandSpec(;kind::Union{Nothing,CommandKind}=nothing,
                      name::String="",
                      short_name::Union{String,Nothing}=nothing,
@@ -154,7 +151,7 @@ function CommandSpec(;kind::Union{Nothing,CommandKind}=nothing,
                      )::CommandSpec
     @assert kind !== nothing "Register and specify a `CommandKind`"
     @assert !isempty(name) "Supply a canonical name"
-    return CommandSpec(kind, name, short_name, handler, ArgSpec(arg_spec...),
+    return CommandSpec(kind, Name(name, short_name), handler, ArgSpec(arg_spec...),
                        OptionSpecs(option_spec), help)
 end
 
@@ -163,9 +160,9 @@ function CommandSpecs(declarations::Vector{CommandDeclaration})::Dict{String,Com
     specs = Dict()
     for dec in declarations
         spec = CommandSpec(;dec...)
-        specs[spec.name] = spec
-        if spec.short_name !== nothing
-            specs[spec.short_name] = spec
+        specs[spec.name.canonical] = spec
+        if spec.name.short !== nothing
+            specs[spec.name.short] = spec
         end
     end
     return specs
@@ -508,7 +505,7 @@ function enforce_argument_count(spec::Pair, args::PkgArguments)
     end
 end
 
-# Only for PkgSpec
+# Only for parse_pkg
 function package_args(args::Vector{Token}; add_or_dev=false)::Vector{PackageSpec}
     pkgs = PackageSpec[]
     for arg in args
@@ -530,7 +527,7 @@ function package_args(args::Vector{Token}; add_or_dev=false)::Vector{PackageSpec
     return pkgs
 end
 
-# Only for PkgSpec
+# Only for parse_pkg
 function word2token(word::AbstractString)::Token
     if first(word) == '@'
         return VersionRange(word[2:end])
@@ -541,7 +538,7 @@ function word2token(word::AbstractString)::Token
     end
 end
 
-# Only for PkgSpec
+# Only for parse_pkg
 function enforce_argument_order(args::Vector{Token})
     prev_arg = nothing
     check_prev_arg(valid_type::DataType, code, objects) =
@@ -621,9 +618,9 @@ function PkgCommand(statement::Statement)::PkgCommand
     ismeta=true
     try
         enforce_option(statement.meta_options, meta_option_specs)
-        ismeta=false
-        args = enforce_argument(statement.arguments, statement.command.argument_spec)
+        ismeta = false
         enforce_option(statement.options, statement.command.option_specs)
+        args = enforce_argument(statement.arguments, statement.command.argument_spec)
         return PkgCommand(statement.meta_options, statement.command, statement.options, args)
     catch ex
         (ex isa PkgError && ex.class == PKG_ERROR_REPL) || rethrow()
@@ -1390,11 +1387,11 @@ let names = String[]
     for (super, specs) in pairs(super_specs)
         super == "package" && continue # skip "package"
         for spec in unique(values(specs))
-            push!(names, join([super, spec.name], "-"))
+            push!(names, join([super, spec.name.canonical], "-"))
         end
     end
     for spec in unique(values(super_specs["package"]))
-        push!(names, spec.name)
+        push!(names, spec.name.canonical)
     end
     completion_cache.canonical_names = names
     sort!(completion_cache.canonical_names)
