@@ -45,6 +45,8 @@ struct OptionSpec
 end
 
 @enum(OptionClass, OPT_ARG, OPT_SWITCH)
+# TODO make this a kw vec too
+# TODO make OPT_SWITCH the default
 const OptionDeclaration = Tuple{Union{String,Vector{String}}, # name + short_name?
                                 OptionClass, # arg or switch
                                 Pair{Symbol, Any} # api keywords
@@ -119,6 +121,7 @@ struct ArgSpec
 end
 # TODO eventually, declarations should be a macro
 const CommandDeclaration = Vector{Pair{Symbol,Any}}
+# TODO merge 'completions'
 struct CommandSpec
     kind::CommandKind
     name::Name
@@ -1131,6 +1134,7 @@ Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`
         (["manifest", "m"], OPT_SWITCH, :manifest => true),
     ],
     :help => md"""
+
     instantiate
     instantiate [-m|--manifest]
     instantiate [-p|--project]
@@ -1206,6 +1210,7 @@ pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
         ("shared", OPT_SWITCH, :shared => true),
     ],
     :help => md"""
+
     develop [--shared|--local] pkg[=uuid] ...
 
 Make a package available for development. If `pkg` is an existing local path that path will be recorded in
@@ -1228,6 +1233,7 @@ pkg> develop --local Example
     :handler => do_free!,
     :arg_spec => (1=>Inf, parse_pkg, []),
     :help => md"""
+
     free pkg[=uuid] ...
 
 Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help develop`) then this command
@@ -1260,6 +1266,7 @@ The `startup.jl` file is disabled during building unless julia is started with `
     :name => "resolve",
     :handler => do_resolve!,
     :help => md"""
+
     resolve
 
 Resolve the project i.e. run package resolution and update the Manifest. This is useful in case the dependencies of developed
@@ -1325,6 +1332,7 @@ Create a project called `pkgname` in the current folder.
     :name => "precompile",
     :handler => do_precompile!,
     :help => md"""
+
     precompile
 
 Precompile all the dependencies of the project by running `import` on all of them in a new process.
@@ -1355,6 +1363,8 @@ includes the dependencies of explicitly added packages.
     :name => "gc",
     :handler => do_gc!,
     :help => md"""
+
+    gc
 
 Deletes packages that cannot be reached from any existing environment.
     """,
