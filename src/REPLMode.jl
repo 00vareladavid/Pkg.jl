@@ -113,19 +113,17 @@ struct ArgSpec
     parser::Function
     parser_keys::Vector{Pair{Symbol, Any}}
 end
-const CommandDeclaration = Tuple{CommandKind,
-                                 Vector{String}, # names
-                                 Union{Nothing,Function}, # handler
-                                 Tuple{Pair, # count
-                                       Function, # parser
-                                       Vector{Pair{Symbol, Any}}, # parser keys
-                                       }, # arguments
-                                 Vector{OptionDeclaration}, # options
-                                 Union{Nothing, Markdown.MD}, #help
-                                 }
+# TODO eventually, declarations should be a macro
+const CommandDeclaration = Vector{Pair{Symbol,Any}}
+#= TODO
+struct CommandNames
+    canonical::String
+    short::Union{Nothing,String}
+end
+=#
 struct CommandSpec
     kind::CommandKind
-    canonical_name::String
+    name::String
     short_name::Union{Nothing,String}
     handler::Union{Nothing,Function}
     argument_spec::ArgSpec
@@ -145,22 +143,30 @@ function SuperSpecs(foo)::Dict{String,Dict{String,CommandSpec}}
     return super_specs
 end
 
+const ArgumentDeclaration = Tuple{Pair, Function, Vector}
+#TODO make sure you don't mistype any of the names
+function CommandSpec(;kind::Union{Nothing,CommandKind}=nothing,
+                     name::String="",
+                     short_name::Union{String,Nothing}=nothing,
+                     handler::Union{Nothing,Function}=nothing,
+                     option_spec::Vector{OptionDeclaration}=OptionDeclaration[],
+                     help::Union{Nothing, Markdown.MD}=nothing,
+                     arg_spec::ArgumentDeclaration=(0=>0,identity,[]),
+                     )::CommandSpec
+    @assert kind !== nothing "Register and specify a `CommandKind`"
+    @assert !isempty(name) "Supply a canonical name"
+    return CommandSpec(kind, name, short_name, handler, ArgSpec(arg_spec...),
+                       OptionSpecs(option_spec), help)
+end
+
 # populate a dictionary: command_name -> command_spec
 function CommandSpecs(declarations::Vector{CommandDeclaration})::Dict{String,CommandSpec}
     specs = Dict()
     for dec in declarations
-        names = dec[2]
-        spec = CommandSpec(dec[1],
-                           names[1],
-                           length(names) == 2 ? names[2] : nothing,
-                           dec[3],
-                           ArgSpec(dec[4]...),
-                           OptionSpecs(dec[5]),
-                           dec[end])
-        for name in names
-            # TODO regex check name
-            @assert get(specs, name, nothing) === nothing
-            specs[name] = spec
+        spec = CommandSpec(;dec...)
+        specs[spec.name] = spec
+        if spec.short_name !== nothing
+            specs[spec.short_name] = spec
         end
     end
     return specs
@@ -1079,27 +1085,26 @@ end
 ########
 # SPEC #
 ########
+# TODO make the super name a single string, instead of a list
 command_declarations = [
 ["registry"] => CommandDeclaration[
-(
-    CMD_REGISTRY_ADD,
-    ["add"],
-    do_registry_add!,
-    (1=>Inf, identity, []),
-    [],
-    nothing,
-),
+[
+    :kind => CMD_REGISTRY_ADD,
+    :name => "add",
+    :handler => do_registry_add!,
+    :arg_spec => (1=>Inf, identity, []),
+],
 ], #registry
 
 ["package"] => CommandDeclaration[
-(   CMD_TEST,
-    ["test"],
-    do_test!,
-    (0=>Inf, parse_pkg, []),
-    [
+[   :kind => CMD_TEST,
+    :name => "test",
+    :handler => do_test!,
+    :arg_spec => (0=>Inf, parse_pkg, []),
+    :option_spec => OptionDeclaration[
         ("coverage", OPT_SWITCH, :coverage => true),
     ],
-    md"""
+    :help => md"""
 
     test [opts] pkg[=uuid] ...
 
@@ -1110,12 +1115,11 @@ in the package directory. The option `--coverage` can be used to run the tests w
 coverage enabled. The `startup.jl` file is disabled during testing unless
 julia is started with `--startup-file=yes`.
     """,
-),( CMD_HELP,
-    ["help", "?"],
-    nothing,
-    (0=>Inf, identity, []),
-    [],
-    md"""
+],[ :kind => CMD_HELP,
+    :name => "help",
+    :short_name => "?",
+    :arg_spec => (0=>Inf, identity, []),
+    :help => md"""
 
     help
 
@@ -1127,15 +1131,14 @@ Display usage information for commands listed.
 
 Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`, `build`, `free`, `pin`, `develop`.
     """,
-),( CMD_INSTANTIATE,
-    ["instantiate"],
-    do_instantiate!,
-    (0=>0, identity, []),
-    [
+],[ :kind => CMD_INSTANTIATE,
+    :name => "instantiate",
+    :handler => do_instantiate!,
+    :option_spec => OptionDeclaration[
         (["project", "p"], OPT_SWITCH, :manifest => false),
         (["manifest", "m"], OPT_SWITCH, :manifest => true),
     ],
-    md"""
+    :help => md"""
     instantiate
     instantiate [-m|--manifest]
     instantiate [-p|--project]
@@ -1143,15 +1146,16 @@ Available commands: `help`, `status`, `add`, `rm`, `up`, `preview`, `gc`, `test`
 Download all the dependencies for the current project at the version given by the project's manifest.
 If no manifest exists or the `--project` option is given, resolve and download the dependencies compatible with the project.
     """,
-),( CMD_RM,
-    ["remove", "rm"],
-    do_rm!,
-    (1=>Inf, parse_pkg, []),
-    [
+],[ :kind => CMD_RM,
+    :name => "remove",
+    :short_name => "rm",
+    :handler => do_rm!,
+    :arg_spec => (1=>Inf, parse_pkg, []),
+    :option_spec => OptionDeclaration[
         (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
         (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
     ],
-    md"""
+    :help => md"""
 
     rm [-p|--project] pkg[=uuid] ...
 
@@ -1171,12 +1175,11 @@ multiple packages in the manifest, `uuid` disambiguates it. Removing a package
 from the manifest forces the removal of all packages that depend on it, as well
 as any no-longer-necessary manifest packages due to project package removals.
     """,
-),( CMD_ADD,
-    ["add"],
-    do_add!,
-    (1=>Inf, parse_pkg, [:add_or_dev => true, :valid => [VersionRange, Rev]]),
-    [],
-    md"""
+],[ :kind => CMD_ADD,
+    :name => "add",
+    :handler => do_add!,
+    :arg_spec => (1=>Inf, parse_pkg, [:add_or_dev => true, :valid => [VersionRange, Rev]]),
+    :help => md"""
 
     add pkg[=uuid] [@version] [#rev] ...
 
@@ -1201,15 +1204,16 @@ pkg> add git@github.com:JuliaLang/Example.jl.git
 pkg> add Example=7876af07-990d-54b4-ab0e-23690620f79a
 ```
     """,
-),( CMD_DEVELOP,
-    ["develop", "dev"],
-    do_develop!,
-    (1=>Inf, parse_pkg, [:add_or_dev => true, :valid => [VersionRange]]),
-    [
+],[ :kind => CMD_DEVELOP,
+    :name => "develop",
+    :short_name => "dev",
+    :handler => do_develop!,
+    :arg_spec => (1=>Inf, parse_pkg, [:add_or_dev => true, :valid => [VersionRange]]),
+    :option_spec => OptionDeclaration[
         ("local", OPT_SWITCH, :shared => false),
         ("shared", OPT_SWITCH, :shared => true),
     ],
-    md"""
+    :help => md"""
     develop [--shared|--local] pkg[=uuid] ...
 
 Make a package available for development. If `pkg` is an existing local path that path will be recorded in
@@ -1227,35 +1231,32 @@ pkg> develop ~/mypackages/Example
 pkg> develop --local Example
 ```
     """,
-),( CMD_FREE,
-    ["free"],
-    do_free!,
-    (1=>Inf, parse_pkg, []),
-    [],
-    md"""
+],[ :kind => CMD_FREE,
+    :name => "free",
+    :handler => do_free!,
+    :arg_spec => (1=>Inf, parse_pkg, []),
+    :help => md"""
     free pkg[=uuid] ...
 
 Free a pinned package `pkg`, which allows it to be upgraded or downgraded again. If the package is checked out (see `help develop`) then this command
 makes the package no longer being checked out.
     """,
-),( CMD_PIN,
-    ["pin"],
-    do_pin!,
-    (1=>Inf, parse_pkg, [:valid => [VersionRange]]),
-    [],
-    md"""
+],[ :kind => CMD_PIN,
+    :name => "pin",
+    :handler => do_pin!,
+    :arg_spec => (1=>Inf, parse_pkg, [:valid => [VersionRange]]),
+    :help => md"""
 
     pin pkg[=uuid] ...
 
 Pin packages to given versions, or the current version if no version is specified. A pinned package has its version fixed and will not be upgraded or downgraded.
 A pinned package has the symbol `⚲` next to its version in the status list.
     """,
-),( CMD_BUILD,
-    ["build"],
-    do_build!,
-    (0=>Inf, parse_pkg, []),
-    [],
-    md"""
+],[ :kind => CMD_BUILD,
+    :name => "build",
+    :handler => do_build!,
+    :arg_spec => (0=>Inf, parse_pkg, []),
+    :help => md"""
 
     build pkg[=uuid] ...
 
@@ -1263,26 +1264,24 @@ Run the build script in `deps/build.jl` for each package in `pkg` and all of the
 If no packages are given, runs the build scripts for all packages in the manifest.
 The `startup.jl` file is disabled during building unless julia is started with `--startup-file=yes`.
     """,
-),( CMD_RESOLVE,
-    ["resolve"],
-    do_resolve!,
-    (0=>0, identity, []),
-    [],
-    md"""
+],[ :kind => CMD_RESOLVE,
+    :name => "resolve",
+    :handler => do_resolve!,
+    :help => md"""
     resolve
 
 Resolve the project i.e. run package resolution and update the Manifest. This is useful in case the dependencies of developed
 packages have changed causing the current Manifest to_indices be out of sync.
     """,
-),( CMD_ACTIVATE,
-    ["activate"],
-    do_activate!,
-    (0=>1, identity, []),
-    [
+],[ :kind => CMD_ACTIVATE,
+    :name => "activate",
+    :handler => do_activate!,
+    :arg_spec => (0=>1, identity, []),
+    :option_spec => OptionDeclaration[
         ("shared", OPT_SWITCH, :shared => true),
     ],
-    md"""
-    activate
+    :help => md"""
+
     activate [--shared] path
 
 Activate the environment at the given `path`, or the home project environment if no `path` is specified.
@@ -1291,11 +1290,12 @@ When the option `--shared` is given, `path` will be assumed to be a directory na
 `environments` folders of the depots in the depot stack. In case no such environment exists in any of the depots,
 it will be placed in the first depot of the stack.
     """ ,
-),( CMD_UP,
-    ["update", "up"],
-    do_up!,
-    (0=>Inf, parse_pkg, [:valid => [VersionRange]]),
-    [
+],[ :kind => CMD_UP,
+    :name => "update",
+    :short_name => "up",
+    :handler => do_up!,
+    :arg_spec => (0=>Inf, parse_pkg, [:valid => [VersionRange]]),
+    :option_spec => OptionDeclaration[
         (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
         (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
         ("major", OPT_SWITCH, :level => UPLEVEL_MAJOR),
@@ -1303,7 +1303,7 @@ it will be placed in the first depot of the stack.
         ("patch", OPT_SWITCH, :level => UPLEVEL_PATCH),
         ("fixed", OPT_SWITCH, :level => UPLEVEL_FIXED),
     ],
-    md"""
+    :help => md"""
 
     up [-p|project]  [opts] pkg[=uuid] [@version] ...
     up [-m|manifest] [opts] pkg[=uuid] [@version] ...
@@ -1319,37 +1319,34 @@ the following packages to be upgraded only within the current major, minor,
 patch version; if the `--fixed` upgrade level is given, then the following
 packages will not be upgraded at all.
     """,
-),( CMD_GENERATE,
-    ["generate"],
-    do_generate!,
-    (1=>1, identity, []),
-    [],
-    md"""
+],[ :kind => CMD_GENERATE,
+    :name => "generate",
+    :handler => do_generate!,
+    :arg_spec => (1=>1, identity, []),
+    :help => md"""
 
     generate pkgname
 
 Create a project called `pkgname` in the current folder.
     """,
-),( CMD_PRECOMPILE,
-    ["precompile"],
-    do_precompile!,
-    (0=>0, identity, []),
-    [],
-    md"""
+],[ :kind => CMD_PRECOMPILE,
+    :name => "precompile",
+    :handler => do_precompile!,
+    :help => md"""
     precompile
 
 Precompile all the dependencies of the project by running `import` on all of them in a new process.
 The `startup.jl` file is disabled during precompilation unless julia is started with `--startup-file=yes`.
     """,
-),( CMD_STATUS,
-    ["status", "st"],
-    do_status!,
-    (0=>0, identity, []),
-    [
+],[ :kind => CMD_STATUS,
+    :name => "status",
+    :short_name => "st",
+    :handler => do_status!,
+    :option_spec => OptionDeclaration[
         (["project", "p"], OPT_SWITCH, :mode => PKGMODE_PROJECT),
         (["manifest", "m"], OPT_SWITCH, :mode => PKGMODE_MANIFEST),
     ],
-    md"""
+    :help => md"""
 
     status
     status [-p|--project]
@@ -1362,23 +1359,19 @@ any changes to manifest packages not already listed. In `--project` mode, the
 status of the project file is summarized. In `--manifest` mode the output also
 includes the dependencies of explicitly added packages.
     """,
-),( CMD_GC,
-    ["gc"],
-    do_gc!,
-    (0=>0, identity, []),
-    [],
-    md"""
+],[ :kind => CMD_GC,
+    :name => "gc",
+    :handler => do_gc!,
+    :help => md"""
 
 Deletes packages that cannot be reached from any existing environment.
     """,
-),( # preview is not a regular command.
+],[ # preview is not a regular command.
     # this is here so that preview appears as a registered command to users
-    CMD_PREVIEW,
-    ["preview"],
-    nothing,
-    (1=>Inf, identity, []),
-    [],
-    md"""
+    :kind => CMD_PREVIEW,
+    :name => "preview",
+    :arg_spec => (1=>Inf, identity, []), # TODO can this be removed?
+    :help => md"""
 
     preview cmd
 
@@ -1386,7 +1379,7 @@ Runs the command `cmd` in preview mode. This is defined such that no side effect
 will take place i.e. no packages are downloaded and neither the project nor manifest
 is modified.
     """,
-),
+],
 ], #package
 ] #command_declarations
 
@@ -1399,11 +1392,11 @@ let names = String[]
     for (super, specs) in pairs(super_specs)
         super == "package" && continue # skip "package"
         for spec in unique(values(specs))
-            push!(names, join([super, spec.canonical_name], "-"))
+            push!(names, join([super, spec.name], "-"))
         end
     end
     for spec in unique(values(super_specs["package"]))
-        push!(names, spec.canonical_name)
+        push!(names, spec.name)
     end
     completion_cache.canonical_names = names
     sort!(completion_cache.canonical_names)
