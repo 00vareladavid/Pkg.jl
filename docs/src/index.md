@@ -1,5 +1,312 @@
 # Pkg
 
+## Guide
+
+### What is Pkg
+
+Pkg is the standard package manager for Julia.
+Unlike traditional package managers,
+  which manage a single global set of packages,
+  Pkg is designed around **environments**: independent sets of packages.
+The metadata for an environment is stored in a **manifest file**.
+Given a manifest file, Pkg can:
+
+- fetch the packages described in the manifest file
+- build and test those packages
+
+Aditionally, Pkg is an interface which allows you to easily construct new environments.
+
+TODO shoud add justification?
+
+### Adding and Removing Packages
+
+Pkg provides a REPL mode that is suitable for interactive use.
+Once inside a Julia REPL, press `]` to enter the Pkg REPL.
+
+You should see the following prompt:
+
+```
+(1.0) pkg> 
+```
+
+The name inside parentheses denotes the **active enviroment**.
+The active environment is the environment which will be operated on by a REPL command.
+In this case, we are in the `1.0` environment, the default active environment.
+
+Now let's go back to the Julia REPL by pressing the backspace key.
+Aditionally, lets try loading the `Plots` package.
+
+```
+julia> import Plots
+```
+
+You should see an error.
+This is because `Plots` is not available to the current environment.
+We should fix that!
+First, enter the Pkg REPL again (by pressing `]`).
+Then add the `Plots` package to the active environment:
+
+```
+(1.0) pkg> add Plots
+```
+
+You should see some feedback and be dropped back in the Pkg REPL.
+Lets go back to the Julia REPL and try using `Plots` again:
+
+```
+julia> import Plots
+julia> Plots.foo()
+```
+
+Now that `Plots` is available to the current environment,
+  you should see no errors when importing.
+
+We can query the current environment to see the set of installed packages:
+
+```
+(v1.0) pkg> status
+    Status `~/.julia/environments/v1.0/Project.toml`
+  [91a5bcdd] Plots v0.20.2
+```
+
+We can see that `status` gives us the names of packages in the active environment,
+  along with other usefull metadata.
+
+Since this is only a tutorial, you may not want `Plots` to stick around.
+Lets remove it.
+We can do this with the `rm` command:
+
+```
+(1.0) pkg> rm Plots
+```
+
+We can query the active environment again (with `status`) to be confident
+  that Pkg did indeed remove `Plots`.
+
+We are now well on our way to mastering Pkg.
+We can add packages with `add`,
+  remove them with `rm`
+  and query the state of an environment with `status`.
+  
+### Creating Your Own Package
+
+Creating your own package can give you insight into how environments work.
+Lets give it a shot.
+
+We use `generate` to tell Pkg to create a new package:
+
+```
+(1.0) pkg> generate MyPackage
+Generating project MyPackage:
+    MyPackage/Project.toml
+    MyPackage/src/MyPackage.jl
+```
+
+We see from the feedback that Pkg created two essential files.
+Lets take a look at the `Project.toml` file:
+
+```
+shell> cat MyPackage/Project.toml
+name = "MyPackage"
+uuid = "ee7aa330-b96d-11e8-3e24-1dfbc2a41582"
+version = "0.1.0"
+
+[deps]
+```
+
+We can see that `Project.toml` is where Pkg stores package metadata.
+The important thing to notice is that the `deps` section is empty.
+`deps` is used by Pkg to record a package's dependencies.
+Since we just created `MyPackage`, it does not have any recorded dependencies.
+
+But lets say we want to add plotting capabilites to `MyPackage`.
+We can use Pkg to make the `Plots` package available for use.
+
+Recall that all REPL commands operate on the active environment.
+Lets tell Pkg that future commands should operate on `MyPackage`:
+
+```
+(1.0) pkg> activate MyPackage
+```
+
+The REPL prompt should now look like this:
+
+```
+(MyPackage) pkg> 
+```
+
+Pkg is letting you know that subsequent commands will affect `MyPackage`'s environment.
+Now lets install the `Plots` package:
+
+```
+(MyPackage) pkg> add Plots
+ Resolving package versions...
+  Updating `/tmp/MyPackage/Project.toml`
+  [91a5bcdd] + Plots v0.20.2
+  Updating `/tmp/MyPackage/Manifest.toml`
+  [3da002f7] + ColorTypes v0.7.4
+  [5ae59095] + Colors v0.9.4
+  [34da2185] + Compat v1.1.0
+  [cf7118a7] + UUIDs 
+  ...
+  [4ec0a83e] + Unicode 
+```
+
+Specifically, notice this line:
+
+```
+Updating `/tmp/MyPackage/Project.toml`
+```
+
+So it seems like Pkg modified the `Project.toml` file.
+Lets check it out:
+
+```
+shell> cat MyPackage/Project.toml
+name = "MyPackage"
+uuid = "ee7aa330-b96d-11e8-3e24-1dfbc2a41582"
+authors = ["David Varela <00.varela.david@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Plots = "91a5bcdd-55d7-5caf-9e0b-520d859cae80"
+```
+
+Aha! We can see that `deps` is no longer empty: now it contains `Plots`.
+So Pkg not only makes `Plots` available for use (e.g. using the `import` statement),
+  it also records that dependency in `Project.toml`.
+The `deps` section of `Project.toml` describes the environment.
+
+You may have noticed that `Manifest.toml` is also modified.
+`Manifest.toml` stores the complete dependency graph for a package.
+Although the files are human readable,
+  it should not be necessary to modify `Project.toml` nor `Manfiest.toml` during regular use.
+  
+TODO should talk about adding removing more packages? I think they get the gist by now..
+TODO what about dev?
+
+# Working With Environments
+
+Lets continue from the previous section.
+To recap, all we did was add the `Plots` package to the `MyPackage` environment.
+Also, the active environment is still `MyPackage`.
+
+Lets return to the **default environment**.
+We can do this by running `activate` without any arguments.
+
+```
+(MyPackage) pkg> activate
+
+(v1.0) pkg> 
+```
+
+As we can see, `v1.0` (the default environment) is now the active environment.
+
+If we return to the julia REPL and try to access `Plots`, we will get an error:
+
+```
+julia> import Plots
+ERROR: ArgumentError: Package Plots not found in current path:
+- Run `Pkg.add("Plots")` to install the Plots package.
+```
+
+Julia helpfully tells us that `Plots` is not accesible and prescribes a solution.
+Another way to verify that `Plots` is not available is to check with the `status` command:
+
+```
+(v1.0) pkg> status
+    Status `~/.julia/environments/v1.0/Project.toml`
+```
+
+We can see that the default environment is currently empty.
+
+Notice that the feedback also mentions a `Project.toml`.
+There is nothing special about the default environment:
+  it is specified by a project file, just like all other environments.
+  
+By now, it should be clear that different environments give us access to different
+  sets of packages.
+While maintaining seprate environments is essential for reproducability,
+  it can be cumbersome in practice.
+Pkg provides a clean solution to this usability problem: **stacked environments**.
+Stacked environments allow us to easily compose environments.
+
+As a motivating example,
+  say we wanted to make the `Revise` package available during development.
+Although we want acccess to `Revise`,
+  it is not really a dependency of `MyPackage`:
+  it doesn't make much sense to record it in `MyPackage/Project.toml`.
+
+The environment stack is represented by Julia with `LOAD_PATH`.
+Lets take a look:
+
+```
+julia> LOAD_PATH
+3-element Array{String,1}:
+ "@"
+ "@v#.#"
+ "@stdlib"
+```
+
+We can see that LOAD_PATH is just a regular `Array{String,1}`.
+Currently, `LOAD_PATH` is populated with strings that have special meanings.
+
+- "@"       -> active environment
+- "@v#.#"   -> default environment
+- "@stdlib" -> standard library
+
+The important thing to notice right now is,
+  regardless of the active environment,
+  we will have access to packages in the default environment.
+  
+Lets recall our goals:
+
+- `MyPackage`'s environment should reflect `MyPackage`'s dependencies
+- `Revise` should be available when developing `MyPackage`
+
+Do you see a solution?
+If we add `Revise` to the default environment,
+  we should still have access to it even if `MyPackage` is the active environment.
+Lets give it a shot.
+
+Lets make the default environment the active environment:
+
+```
+(MyPackage) pkg> activate
+```
+
+Now `add` will operate on the default environment.
+So lets add `Revise`:
+
+```
+(v1.0) pkg> add Revise
+```
+
+You should see some feedback and be dropped back into the Pkg REPL.
+Use `status` to double check that `Revise` is installed.
+
+Ok, now lets activate `MyPackage`:
+
+```
+(v1.0) pkg> activate /tmp/MyPackage
+```
+
+The Pkg REPL prompt should update accordingly (to `(MyPackage) pkg>`).
+Finally, lets return to the julia REPL and try to load `Revise`.
+Now we should get no errors when loading!
+
+## Summary
+
+Global environments are painful because ..
+Isolated environments allow us to specify the dependencies of a project,
+  without worrying about other installed packages.
+Completely isolated environments are cumbersome because ..
+Composable environments are a happy medium.
+The environment stack is reprepresented by `LOAD_PATH`.
+Individual environments can be modified by
+  first pointing Pkg to that environment (with `activate`),
+  then operating on the active environment with Pkg commands.
+
 ## Introduction
 
 Pkg is the standard package manager for Julia 1.0 and newer. Unlike traditional
