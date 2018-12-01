@@ -608,6 +608,13 @@ end
     end
 end
 
+@testset "reading corrupted manifest files" begin
+    dir = joinpath(@__DIR__, "manifest", "bad")
+    for bad_manifest in joinpath.(dir, readdir(dir))
+        @test_throws PkgError Pkg.Types.read_manifest(bad_manifest)
+    end
+end
+
 include("repl.jl")
 include("api.jl")
 include("registry.jl")
