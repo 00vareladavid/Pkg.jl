@@ -11,7 +11,7 @@ import Base.string
 using REPL.TerminalMenus
 
 using ..TOML
-import ..Pkg, ..UPDATED_REGISTRY_THIS_SESSION
+import ..Pkg, ..UPDATED_REGISTRY_THIS_SESSION, ..DEFAULT_IO
 import Pkg: GitTools, depots, depots1, logdir, set_readonly
 import ..BinaryPlatforms: Platform
 
@@ -308,7 +308,7 @@ include("manifest.jl")
 # ENV variables to set some of these defaults?
 Base.@kwdef mutable struct Context
     env::EnvCache = EnvCache()
-    io::IO = stderr
+    io::IO = DEFAULT_IO[] === nothing ? stderr : DEFAULT_IO[]
     use_libgit2_for_all_downloads::Bool = false
     use_only_tarballs_for_downloads::Bool = false
     # NOTE: The JULIA_PKG_CONCURRENCY environment variable is likely to be removed in
