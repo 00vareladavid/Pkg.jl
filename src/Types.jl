@@ -555,10 +555,10 @@ function handle_repo_develop!(ctx::Context, pkg::PackageSpec, shared::Bool)
         update_registries(ctx)
         registry_resolve!(ctx, pkg)
         if pkg.name === nothing || pkg.uuid === nothing
-            pkgerror("Package $(err_rep(pkg)) could not be found in a registry.") # TODO test this
+            pkgerror("expected package $(err_rep(pkg)) to be registered") # TODO test this
         end
         paths = registered_paths(ctx, pkg.uuid)
-        isempty(paths) && pkgerror("Package $(err_rep(pkg)) could not be found in a registry.")
+        isempty(paths) && pkgerror("expected package $(err_rep(pkg)) to be registered")
         _, location = Types.registered_info(ctx, pkg.uuid, "repo")[1] #TODO look into [1]
         temp_clone = fresh_clone(ctx, location)
         new = move_to_dev_path!(ctx, pkg, shared, temp_clone)
