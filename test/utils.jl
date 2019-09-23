@@ -6,7 +6,68 @@ import ..Pkg
 
 export temp_pkg_dir, cd_tempdir, isinstalled, write_build, with_current_env,
        with_temp_env, with_pkg_env, git_init_and_commit, copy_test_package,
-       git_init_package, add_this_pkg, TEST_SIG, TEST_PKG
+       git_init_package, add_this_pkg, TEST_SIG, TEST_PKG, isolate, LOADED_DEPOT
+
+const LOADED_DEPOT = joinpath(@__DIR__, "loaded_depot")
+const FORCE_CLEAN_UNITS = false
+
+function test_depot_setup(; loaded_depot=false)
+    if FORCE_CLEAN_UNITS
+        return mktempdir()
+    end
+
+    Pkg.UPDATED_REGISTRY_THIS_SESSION[] = loaded_depot
+
+    test_depot = mktempdir()
+    if isdir(LOADED_DEPOT)
+        if loaded_depot
+            cp(LOADED_DEPOT, test_depot; force=true)
+        else
+            cp(joinpath(LOADED_DEPOT, "registries"), joinpath(test_depot, "registries"))#TODO should remove in final version?
+        end
+    end
+    return test_depot
+end
+
+function isolate(fn::Function; kwargs...)
+    old_load_path = copy(LOAD_PATH)
+    old_depot_path = copy(DEPOT_PATH)
+    old_home_project = Base.HOME_PROJECT[]
+    old_active_project = Base.ACTIVE_PROJECT[]
+    old_working_directory = pwd()
+    try
+        empty!(LOAD_PATH)
+        empty!(DEPOT_PATH)
+        Base.HOME_PROJECT[] = nothing
+        Base.ACTIVE_PROJECT[] = nothing
+        Pkg.UPDATED_REGISTRY_THIS_SESSION[] = false
+        Pkg.REPLMode.TEST_MODE[] = false
+        withenv("JULIA_PROJECT" => nothing,
+                "JULIA_LOAD_PATH" => nothing,
+                "JULIA_PKG_DEVDIR" => nothing) do
+            test_depot = nothing
+            try
+                test_depot = test_depot_setup(; kwargs...)
+                push!(LOAD_PATH, "@", "@v#.#", "@stdlib")
+                push!(DEPOT_PATH, test_depot)
+                fn()
+            finally
+                if test_depot !== nothing && isdir(test_depot)
+                    Base.rm(test_depot; force=true, recursive=true)
+                end
+            end
+        end
+    finally
+        empty!(LOAD_PATH)
+        empty!(DEPOT_PATH)
+        append!(LOAD_PATH, old_load_path)
+        append!(DEPOT_PATH, old_depot_path)
+        Base.HOME_PROJECT[] = old_home_project
+        Base.ACTIVE_PROJECT[] = old_active_project
+        cd(old_working_directory)
+        Pkg.REPLMode.TEST_MODE[] = false # reset unconditionally
+    end
+end
 
 function temp_pkg_dir(fn::Function;rm=true)
     old_load_path = copy(LOAD_PATH)
@@ -144,8 +205,9 @@ function git_init_package(tmp, path)
 end
 
 function copy_test_package(tmpdir::String, name::String; use_pkg=true)
-    cp(joinpath(@__DIR__, "test_packages", name), joinpath(tmpdir, name))
-    use_pkg || return
+    target = joinpath(tmpdir, name)
+    cp(joinpath(@__DIR__, "test_packages", name), target)
+    use_pkg || return target
 
     # The known Pkg UUID, and whatever UUID we're currently using for testing
     known_pkg_uuid = "44cfe95a-1eb2-52ea-b672-e2afdf69b78f"
@@ -159,6 +221,7 @@ function copy_test_package(tmpdir::String, name::String; use_pkg=true)
             write(fpath, replace(read(fpath, String), known_pkg_uuid => pkg_uuid))
         end
     end
+    return target
 end
 
 function add_this_pkg()

@@ -5,7 +5,8 @@ module PkgTests
 import Pkg
 
 include("utils.jl")
-
+include("new.jl")
+#=
 include("pkg.jl")
 include("repl.jl")
 include("api.jl")
@@ -18,5 +19,6 @@ include("resolve.jl")
 
 # clean up locally cached registry
 rm(joinpath(@__DIR__, "registries"); force = true, recursive = true)
+=#
 
 end # module
